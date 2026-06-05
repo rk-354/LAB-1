@@ -274,8 +274,26 @@ function DocLibrary() {
         console.error('[DocLibrary] upload error:', errMsg)
         setToast({ msg: errMsg, ok: false })
       } else {
+        const uploadData = json.data as { document_id: string; indexing_status: string } | undefined
+
+        // Optimistically add the new doc to the list immediately — no re-fetch needed
+        const optimisticDoc: ApiDoc = {
+          id: uploadData?.document_id || `temp-${Date.now()}`,
+          title: pendingFile.name.replace(/\.[^.]+$/, ''),
+          department_slug: dept,
+          doc_type: 'general',
+          current_version: 1,
+          updated_at: new Date().toISOString(),
+          document_versions: [{
+            file_size: pendingFile.size,
+            indexing_status: 'pending',
+          }],
+        }
+        setDocs(prev => [optimisticDoc, ...prev])
         setToast({ msg: `"${pendingFile.name}" uploaded — indexing started`, ok: true })
-        await fetchDocs()
+
+        // Also refresh in background to get the real DB record
+        setTimeout(() => fetchDocs(), 2000)
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Upload failed'
