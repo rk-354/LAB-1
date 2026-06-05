@@ -3,11 +3,14 @@
 
 import { logger } from '@/lib/logger'
 
-const OLLAMA_BASE  = process.env.OLLAMA_BASE_URL  || 'http://localhost:11434'
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL     || 'llama3.2:3b'
-const NVIDIA_KEY   = process.env.NVIDIA_API_KEY   || ''
-const NVIDIA_MODEL = process.env.NVIDIA_MODEL     || 'nvidia/nemotron-3-ultra-550b-a55b'
-const NVIDIA_BASE  = 'https://integrate.api.nvidia.com/v1'
+// Read at call time (not module load) so env vars can be overridden in tests
+const cfg = () => ({
+  ollamaBase:  process.env.OLLAMA_BASE_URL  || 'http://localhost:11434',
+  ollamaModel: process.env.OLLAMA_MODEL     || 'llama3.2:3b',
+  nvidiaKey:   process.env.NVIDIA_API_KEY   || '',
+  nvidiaModel: process.env.NVIDIA_MODEL     || 'nvidia/nemotron-3-ultra-550b-a55b',
+  nvidiaBase:  'https://integrate.api.nvidia.com/v1',
+})
 
 export interface LLMMessage {
   role: 'user' | 'assistant' | 'system'
@@ -25,8 +28,9 @@ export interface LLMResponse {
 
 // ── Ollama ─────────────────────────────────────────────────
 async function callOllama(messages: LLMMessage[], systemPrompt?: string): Promise<LLMResponse> {
+  const { ollamaBase, ollamaModel } = cfg()
   const payload = {
-    model: OLLAMA_MODEL,
+    model: ollamaModel,
     messages: systemPrompt
       ? [{ role: 'system', content: systemPrompt }, ...messages]
       : messages,
@@ -34,7 +38,7 @@ async function callOllama(messages: LLMMessage[], systemPrompt?: string): Promis
     options: { temperature: 0.1, num_predict: 1024 },
   }
 
-  const res = await fetch(`${OLLAMA_BASE}/api/chat`, {
+  const res = await fetch(`${ollamaBase}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -46,7 +50,7 @@ async function callOllama(messages: LLMMessage[], systemPrompt?: string): Promis
   const data = await res.json()
   return {
     content: data.message?.content || '',
-    model: OLLAMA_MODEL,
+    model: ollamaModel,
     provider: 'ollama',
     input_tokens: data.prompt_eval_count || 0,
     output_tokens: data.eval_count || 0,
@@ -56,19 +60,20 @@ async function callOllama(messages: LLMMessage[], systemPrompt?: string): Promis
 
 // ── NVIDIA NIM (OpenAI-compatible) ─────────────────────────
 async function callNvidia(messages: LLMMessage[], systemPrompt?: string): Promise<LLMResponse> {
+  const { nvidiaBase, nvidiaKey, nvidiaModel } = cfg()
   const allMessages = [
     ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
     ...messages,
   ]
 
-  const res = await fetch(`${NVIDIA_BASE}/chat/completions`, {
+  const res = await fetch(`${nvidiaBase}/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${NVIDIA_KEY}`,
+      'Authorization': `Bearer ${nvidiaKey}`,
     },
     body: JSON.stringify({
-      model: NVIDIA_MODEL,
+      model: nvidiaModel,
       messages: allMessages,
       temperature: 0.1,
       max_tokens: 1024,
@@ -88,7 +93,7 @@ async function callNvidia(messages: LLMMessage[], systemPrompt?: string): Promis
 
   return {
     content,
-    model: NVIDIA_MODEL,
+    model: nvidiaModel,
     provider: 'nvidia',
     input_tokens: usage.prompt_tokens || 0,
     output_tokens: usage.completion_tokens || 0,
@@ -129,10 +134,11 @@ export async function chat(
 ): Promise<LLMResponse> {
 
   // 1. Try NVIDIA NIM (primary — cloud, free tier, 550B reasoning model)
-  if (NVIDIA_KEY) {
+  const { nvidiaKey, ollamaModel, nvidiaModel } = cfg()
+  if (nvidiaKey) {
     try {
       const result = await callNvidia(messages, systemPrompt)
-      logger.info('llm: NVIDIA NIM responded', { model: NVIDIA_MODEL, tokens_out: result.output_tokens })
+      logger.info('llm: NVIDIA NIM responded', { model: nvidiaModel, tokens_out: result.output_tokens })
       return result
     } catch (e) {
       logger.warn('LLM router: NVIDIA failed, trying Ollama', {
@@ -168,7 +174,7 @@ export async function chat(
   // All failed
   return {
     content: 'No LLM available. Check NVIDIA API key or run: ollama serve',
-    model: NVIDIA_MODEL,
+    model: nvidiaModel,
     provider: 'nvidia',
     input_tokens: 0,
     output_tokens: 0,

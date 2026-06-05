@@ -24,37 +24,57 @@ describe('LLM Router', () => {
     vi.unstubAllEnvs()
   })
 
-  describe('Ollama primary path (no health check)', () => {
-    it('calls Ollama chat directly and returns response', async () => {
-      // New router: single fetch call to Ollama chat endpoint (no health check)
+  describe('NVIDIA primary path', () => {
+    it('calls NVIDIA NIM first and returns response when key is set', async () => {
+      vi.stubEnv('NVIDIA_API_KEY', 'nvapi-test-key')
+      // NVIDIA uses OpenAI-compatible response format
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          message: { content: 'Confined space entry requires a signed permit.' },
-          prompt_eval_count: 50,
-          eval_count: 30,
+          choices: [{ message: { content: 'Confined space entry requires a signed permit.' } }],
+          usage: { prompt_tokens: 50, completion_tokens: 30 },
+          model: 'nvidia/nemotron-3-ultra-550b-a55b',
         }),
       })
 
       const result = await chat([{ role: 'user', content: 'What is confined space entry?' }])
 
-      expect(result.provider).toBe('ollama')
+      expect(result.provider).toBe('nvidia')
       expect(result.content).toContain('permit')
       expect(result.input_tokens).toBe(50)
       expect(result.output_tokens).toBe(30)
       expect(result.cached).toBe(false)
     })
 
-    it('returns error message when Ollama is down and no Anthropic key', async () => {
-      // Ollama call fails
+    it('falls back to Ollama when NVIDIA fails', async () => {
+      vi.stubEnv('NVIDIA_API_KEY', 'nvapi-test-key')
+      // NVIDIA fails
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 500, text: async () => 'error' })
+      // Ollama succeeds
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          message: { content: 'Ollama fallback response' },
+          prompt_eval_count: 20,
+          eval_count: 10,
+        }),
+      })
+
+      const result = await chat([{ role: 'user', content: 'test' }])
+      expect(result.provider).toBe('ollama')
+      expect(result.content).toContain('Ollama fallback')
+    })
+
+    it('returns error message when all LLMs fail', async () => {
+      // NVIDIA key not set → skipped; Ollama fails
+      vi.stubEnv('NVIDIA_API_KEY', '')
       mockFetch.mockRejectedValueOnce(new Error('Connection refused'))
 
       const result = await chat([{ role: 'user', content: 'Hello' }])
 
       // Returns a graceful error message, not a thrown exception
-      expect(result.provider).toBe('ollama')
-      expect(result.content).toContain('Ollama')
-      expect(result.content.toLowerCase()).toMatch(/not responding|running/)
+      expect(result.content).toBeTruthy()
+      expect(result.content.toLowerCase()).toMatch(/ollama|nvidia|available/)
     })
 
     it('returns cached:false for all Ollama responses', async () => {
