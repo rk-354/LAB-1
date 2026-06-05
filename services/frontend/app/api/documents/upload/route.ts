@@ -8,6 +8,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { runIngestion } from '@/lib/rag/ingest'
 import { NextResponse } from 'next/server'
 import crypto from 'crypto'
+import { logger } from '@/lib/logger'
 
 const ALLOWED_TYPES: Record<string, string> = {
   'application/pdf': 'pdf',
@@ -114,7 +115,7 @@ export async function POST(req: Request) {
     indexingStatus = 'ready'
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Ingestion failed'
-    console.error('[upload] ingestion error:', msg)
+    logger.error('upload: ingestion failed', { document_id: doc.id, error: msg })
     // Don't fail the whole upload — file is in storage, just not indexed yet
     indexingStatus = 'error'
   }
