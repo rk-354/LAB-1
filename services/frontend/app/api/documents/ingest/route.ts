@@ -66,66 +66,57 @@ export async function POST(req: Request) {
     // Chunk text
     const chunks = chunkText(text)
 
-    // Generate embeddings in batches of 10
-    const batchSize = 10
-    const allEmbeddings: number[][] = []
-    for (let i = 0; i < chunks.length; i += batchSize) {
-      const batch = chunks.slice(i, i + batchSize)
-      const embeddings = await embedBatch(batch.map(c => c.text))
-      allEmbeddings.push(...embeddings)
-    }
-
     const doc = version.documents as { title: string; department_slug: string }
 
-    // Ensure ES index exists (no-op if already there)
-    await ensureIndex()
+    // ── Fast path: all embeddings in ONE parallel Promise.all ──────────────
+    const allEmbeddings = await embedBatch(chunks.map(c => c.text))
 
-    // Store chunks + embeddings in Supabase + Elasticsearch
-    for (let i = 0; i < chunks.length; i++) {
-      const chunk = chunks[i]
-      const embedding = allEmbeddings[i]
-      const chunkMeta = {
-        filename: version.file_name,
-        page_number: chunk.pageHint,
-        title: doc.title,
-        chunk_index: chunk.index,
-      }
+    // ── Batch insert ALL chunk metadata in one DB call ─────────────────────
+    const { data: chunkRecords, error: chunkErr } = await admin
+      .from('document_chunks')
+      .insert(chunks.map(c => ({
+        document_id: body.document_id,
+        version_number: body.version_number,
+        chunk_index: c.index,
+        page_number: c.pageHint,
+        text_preview: c.text.slice(0, 500),
+        token_count: c.tokenCount,
+      })))
+      .select('id')
 
-      // Insert chunk metadata into PostgreSQL
-      const { data: chunkRecord } = await admin
-        .from('document_chunks')
-        .insert({
-          document_id: body.document_id,
-          version_number: body.version_number,
-          chunk_index: chunk.index,
-          page_number: chunk.pageHint,
-          text_preview: chunk.text.slice(0, 500),
-          token_count: chunk.tokenCount,
-        })
-        .select('id')
-        .single()
-
-      if (chunkRecord) {
-        // Insert embedding into pgvector
-        await admin.from('document_embeddings').insert({
-          chunk_id: chunkRecord.id,
-          document_id: body.document_id,
-          department_slug: doc.department_slug,
-          embedding: embedding,
-          chunk_text: chunk.text,
-          metadata: chunkMeta,
-        })
-
-        // Index into Elasticsearch for BM25 keyword search
-        await indexChunk(
-          chunkRecord.id,
-          body.document_id,
-          chunk.text,
-          doc.department_slug,
-          chunkMeta
-        )
-      }
+    if (chunkErr || !chunkRecords?.length) {
+      await admin.from('document_versions').update({ indexing_status: 'error' }).eq('id', version.id)
+      return NextResponse.json({ data: null, error: 'Failed to insert chunks' }, { status: 500 })
     }
+
+    // ── Batch insert ALL embeddings in one DB call ─────────────────────────
+    const embeddingRows = chunkRecords.map((rec, i) => ({
+      chunk_id: rec.id,
+      document_id: body.document_id,
+      department_slug: doc.department_slug,
+      embedding: allEmbeddings[i],
+      chunk_text: chunks[i].text,
+      metadata: {
+        filename: version.file_name,
+        page_number: chunks[i].pageHint,
+        title: doc.title,
+        chunk_index: chunks[i].index,
+      },
+    }))
+
+    await admin.from('document_embeddings').insert(embeddingRows)
+
+    // ── Elasticsearch indexing — fire-and-forget (non-blocking) ───────────
+    ensureIndex().then(() =>
+      Promise.all(chunkRecords.map((rec, i) =>
+        indexChunk(rec.id, body.document_id, chunks[i].text, doc.department_slug, {
+          filename: version.file_name,
+          page_number: chunks[i].pageHint,
+          title: doc.title,
+          chunk_index: chunks[i].index,
+        })
+      ))
+    ).catch(() => { /* ES is optional — don't fail if it's down */ })
 
     // Mark as ready
     await admin.from('document_versions').update({
