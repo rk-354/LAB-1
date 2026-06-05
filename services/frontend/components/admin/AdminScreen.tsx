@@ -306,6 +306,17 @@ function DocLibrary({ docs, setDocs, loading, reload }: DocLibraryProps) {
 
   const filtered = docs.filter(d => (d.title + d.department_slug).toLowerCase().includes(q.toLowerCase()))
 
+  // Poll every 3s until no docs are still in processing/pending state
+  useEffect(() => {
+    const hasProcessing = docs.some(d => {
+      const s = d.document_versions?.[0]?.indexing_status
+      return s === 'processing' || s === 'pending'
+    })
+    if (!hasProcessing) return
+    const timer = setTimeout(reload, 3000)
+    return () => clearTimeout(timer)
+  }, [docs, reload])
+
   const handleUpload = async (dept: string) => {
     if (!pendingFile) return
     setUploading(true)
@@ -315,19 +326,30 @@ function DocLibrary({ docs, setDocs, loading, reload }: DocLibraryProps) {
       form.append('department_slug', dept)
       form.append('doc_type', 'general')
       const res = await fetch('/api/documents/upload', { method: 'POST', body: form, credentials: 'include' })
-      let json: { data?: { document_id?: string }; error?: string }
+      let json: { data?: { document_id?: string; indexing_status?: string; chunks_indexed?: number }; error?: string }
       try { json = await res.json() } catch { json = { error: `Server error ${res.status}` } }
       if (!res.ok || json.error) { showToast(json.error || `HTTP ${res.status}`, false); return }
+
+      // Use real indexing_status from response (ingestion runs inline, so it may already be 'ready')
+      const realStatus = json.data?.indexing_status || 'pending'
+      const chunksMsg = json.data?.chunks_indexed ? ` · ${json.data.chunks_indexed} chunks indexed` : ''
+
       const optimistic: ApiDoc = {
         id: json.data?.document_id || `tmp-${Date.now()}`,
         title: pendingFile.name.replace(/\.[^.]+$/, ''),
         department_slug: dept, doc_type: 'general',
         current_version: 1, updated_at: new Date().toISOString(),
-        document_versions: [{ file_size: pendingFile.size, indexing_status: 'pending' }],
+        document_versions: [{ file_size: pendingFile.size, indexing_status: realStatus }],
       }
       setDocs(prev => [optimistic, ...prev])
-      showToast(`"${pendingFile.name}" uploaded — indexing started`, true)
-      setTimeout(reload, 2500)
+      showToast(
+        realStatus === 'ready'
+          ? `"${pendingFile.name}" indexed${chunksMsg}`
+          : `"${pendingFile.name}" uploaded — indexing in progress`,
+        true
+      )
+      // Reload from DB to get the canonical record
+      setTimeout(reload, 1500)
     } catch (e) { showToast(e instanceof Error ? e.message : 'Upload failed', false) }
     finally { setUploading(false); setPendingFile(null) }
   }
