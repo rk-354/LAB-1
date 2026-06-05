@@ -39,15 +39,31 @@ interface LoginProps {
 }
 
 export default function Login({ onLogin }: LoginProps) {
-  const [email, setEmail] = useState("dana.okafor@refineiq.io")
+  const [email, setEmail] = useState("")
   const [sent, setSent] = useState(false)
   const [focused, setFocused] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const valid = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)
 
-  const submit = () => {
-    if (!valid) return
-    setSent(true)
-    setTimeout(() => onLogin(), 1700)
+  const submit = async () => {
+    if (!valid || loading) return
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      const json = await res.json()
+      if (json.error) { setError(json.error); return }
+      setSent(true)
+    } catch {
+      setError('Failed to send magic link. Try again.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
