@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 /* ============================================================
    RefinerIQ — Admin panel (users table + document library)
@@ -49,12 +49,12 @@ function UsersTable() {
   )
 
   return (
-    <div className="glass" style={{ borderRadius: "var(--r-lg)", overflow: "hidden" }}>
+    <div style={{ borderRadius: "var(--r-lg)", overflow: "hidden", background: "var(--surface-1)", border: "1px solid var(--border)", boxShadow: "var(--shadow-card)" }}>
       {/* Toolbar */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 20px", borderBottom: "1px solid var(--border)" }}>
         <div style={{
           display: "flex", alignItems: "center", gap: 9, height: 38, padding: "0 13px", flex: 1, maxWidth: 320,
-          borderRadius: 10, background: "rgba(8,12,22,0.5)", border: "1px solid var(--border)"
+          borderRadius: 10, background: "var(--input-bg)", border: "1px solid var(--border)"
         }}>
           <I.search size={16} style={{ color: "var(--text-3)" }} />
           <input
@@ -97,7 +97,7 @@ function UsersTable() {
             borderBottom: i < filtered.length - 1 ? "1px solid var(--border-soft)" : "none",
             transition: "background var(--dur) var(--ease)"
           }}
-          onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = "var(--glass-faint)"}
+          onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = "var(--bg-hover)"}
           onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = "transparent"}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 11, minWidth: 0 }}>
@@ -140,8 +140,7 @@ function UploadModal({ file, onConfirm, onCancel, uploading }: UploadModalProps)
     }}>
       <div className="glass" style={{
         borderRadius: 20, padding: 32, width: 420, maxWidth: "90vw",
-        background: "linear-gradient(180deg, rgba(24,34,60,0.9), rgba(14,20,38,0.95))",
-        boxShadow: "0 24px 64px -16px rgba(0,0,0,0.7)"
+        background: "var(--surface-1)", boxShadow: "var(--shadow-elevated)"
       }}>
         <h3 style={{ margin: "0 0 6px", fontSize: 17, fontWeight: 700 }}>Upload document</h3>
         <p style={{ margin: "0 0 24px", fontSize: 13, color: "var(--text-3)" }}>
@@ -312,7 +311,7 @@ function DocLibrary() {
       )}
 
       {toast && (
-        <div style={{
+        <div className="toast-enter" style={{
           position: "fixed", bottom: 24, right: 24, zIndex: 200,
           padding: "13px 18px", borderRadius: 12, fontSize: 13.5, fontWeight: 500,
           background: toast.ok ? "rgba(110,231,183,0.12)" : "rgba(251,113,133,0.12)",
@@ -332,11 +331,11 @@ function DocLibrary() {
         onChange={handleFileSelect}
       />
 
-      <div className="glass" style={{ borderRadius: "var(--r-lg)", overflow: "hidden" }}>
+      <div style={{ borderRadius: "var(--r-lg)", overflow: "hidden", background: "var(--surface-1)", border: "1px solid var(--border)", boxShadow: "var(--shadow-card)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 20px", borderBottom: "1px solid var(--border)" }}>
           <div style={{
             display: "flex", alignItems: "center", gap: 9, height: 38, padding: "0 13px", flex: 1, maxWidth: 320,
-            borderRadius: 10, background: "rgba(8,12,22,0.5)", border: "1px solid var(--border)"
+            borderRadius: 10, background: "var(--input-bg)", border: "1px solid var(--border)"
           }}>
             <I.search size={16} style={{ color: "var(--text-3)" }} />
             <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search documents…"
@@ -377,7 +376,7 @@ function DocLibrary() {
               borderBottom: i < filtered.length - 1 ? "1px solid var(--border-soft)" : "none",
               transition: "background var(--dur) var(--ease)"
             }}
-            onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = "var(--glass-faint)"}
+            onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = "var(--bg-hover)"}
             onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = "transparent"}
           >
             <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
@@ -418,10 +417,10 @@ function Placeholder({ tab }: PlaceholderProps) {
   const p = map[tab] ?? map.settings
 
   return (
-    <div className="glass" style={{
+    <div style={{
       borderRadius: "var(--r-lg)", padding: 60, display: "flex", flexDirection: "column",
-      alignItems: "center", justifyContent: "center", textAlign: "center", minHeight: 360
-    }}>
+      alignItems: "center", justifyContent: "center", textAlign: "center", minHeight: 360,
+    background: "var(--surface-1)", border: "1px solid var(--border)", boxShadow: "var(--shadow-card)" }}>
       <div style={{
         width: 56, height: 56, borderRadius: 16, display: "grid", placeItems: "center", marginBottom: 18,
         background: "var(--indigo-soft)", border: "1px solid var(--border-ai)", color: "#B9A6FA"
@@ -453,7 +452,7 @@ export default function AdminScreen({ tab }: AdminScreenProps) {
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minWidth: 0 }}>
       <header style={{
         flex: "none", height: 64, display: "flex", alignItems: "center", gap: 14,
-        padding: "0 30px", borderBottom: "1px solid var(--border)", background: "rgba(10,15,30,0.6)", backdropFilter: "blur(10px)"
+        padding: "0 30px", borderBottom: "1px solid var(--border)", background: "var(--glass)", backdropFilter: "blur(12px)"
       }}>
         <div>
           <div style={{ fontSize: 16, fontWeight: 600, lineHeight: 1.1 }}>{t0}</div>
@@ -473,3 +472,5 @@ export default function AdminScreen({ tab }: AdminScreenProps) {
     </div>
   )
 }
+
+

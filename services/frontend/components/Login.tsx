@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 /* ============================================================
    RefinerIQ — Login page (aurora background + magic link)
@@ -88,8 +88,8 @@ export default function Login({ onLogin }: LoginProps) {
       <div className="fade-up" style={{ position: "relative", width: 408, maxWidth: "90vw" }}>
         <div className="glass" style={{
           borderRadius: 24, padding: "40px 38px 30px",
-          boxShadow: "0 30px 80px -20px rgba(0,0,0,0.7), 0 0 0 1px rgba(124,109,245,0.10)",
-          background: "linear-gradient(180deg, rgba(24,34,60,0.72), rgba(14,20,38,0.82))",
+          boxShadow: "var(--shadow-elevated)",
+          background: "var(--glass-strong)",
         }}>
           <div style={{ display: "flex", justifyContent: "center", marginBottom: 26 }}>
             <Logo size={44} textSize={24} />
@@ -112,8 +112,7 @@ export default function Login({ onLogin }: LoginProps) {
               <div style={{
                 display: "flex", alignItems: "center", gap: 10, height: 50, padding: "0 14px",
                 borderRadius: 13, marginBottom: 18,
-                background: "rgba(8,12,22,0.6)",
-                border: "1px solid " + (focused ? "transparent" : "var(--border)"),
+                background: "var(--input-bg)", border: "1px solid " + (focused ? "transparent" : "var(--border)"),
                 animation: focused ? "glow-pulse 2.4s var(--ease) infinite" : "none",
                 transition: "border-color var(--dur) var(--ease)",
               }}>
@@ -139,8 +138,7 @@ export default function Login({ onLogin }: LoginProps) {
               <div style={{
                 display: "flex", alignItems: "center", gap: 10, height: 50, padding: "0 14px",
                 borderRadius: 13, marginBottom: 18,
-                background: "rgba(8,12,22,0.6)",
-                border: "1px solid var(--border)",
+                background: "var(--input-bg)", border: "1px solid var(--border)",
                 transition: "border-color var(--dur) var(--ease)",
               }}>
                 <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -249,3 +247,4 @@ export default function Login({ onLogin }: LoginProps) {
     </div>
   )
 }
+

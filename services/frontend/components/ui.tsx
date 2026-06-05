@@ -64,7 +64,7 @@ export const Avatar = ({ initials, size = 34, ai = false }: AvatarProps) => (
     display: "grid", placeItems: "center",
     fontSize: size * 0.38, fontWeight: 700, letterSpacing: "0.02em",
     color: ai ? "#fff" : "var(--text-1)",
-    background: ai ? "var(--ai-grad)" : "linear-gradient(160deg, #25304F, #18223C)",
+    background: ai ? "var(--ai-grad)" : "var(--bg-elevated)",
     border: "1px solid " + (ai ? "transparent" : "var(--border-strong)"),
     boxShadow: ai ? "0 3px 14px -4px rgba(124,109,245,0.7)" : "none",
   }}>

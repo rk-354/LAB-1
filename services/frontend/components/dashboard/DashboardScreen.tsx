@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 /* ============================================================
    RefinerIQ — Dashboard (Admin view)
@@ -19,9 +19,9 @@ interface StatCardProps {
 function StatCard({ s, i }: StatCardProps) {
   const up = s.dir === "up"
   return (
-    <div className="glass fade-up" style={{
+    <div className="fade-up" style={{
       borderRadius: "var(--r-lg)", padding: "18px 20px", animationDelay: `${i * 60}ms`,
-      background: "linear-gradient(180deg, rgba(24,34,60,0.5), rgba(14,20,38,0.55))",
+      background: "var(--surface-1)", border: "1px solid var(--border)", boxShadow: "var(--shadow-card)",
       position: "relative", overflow: "hidden",
     }}>
       <div style={{
@@ -46,7 +46,7 @@ function StatCard({ s, i }: StatCardProps) {
 /* ---- CoverageChart ---- */
 function CoverageChart() {
   return (
-    <div className="glass" style={{ borderRadius: "var(--r-lg)", padding: 24, height: "100%" }}>
+    <div style={{ borderRadius: "var(--r-lg)", padding: 24, height: "100%", background: "var(--surface-1)", border: "1px solid var(--border)", boxShadow: "var(--shadow-card)" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 22 }}>
         <div>
           <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>Department document coverage</h3>
@@ -64,7 +64,7 @@ function CoverageChart() {
                 <span style={{ marginLeft: 8 }}>{c.docs.toLocaleString()} docs</span>
               </span>
             </div>
-            <div style={{ height: 9, borderRadius: 6, background: "rgba(255,255,255,0.05)", overflow: "hidden" }}>
+            <div style={{ height: 9, borderRadius: 6, background: "var(--bg-elevated)", overflow: "hidden" }}>
               <div style={{
                 height: "100%", width: `${c.pct}%`, borderRadius: 6,
                 background: "var(--ai-grad)",
@@ -81,7 +81,7 @@ function CoverageChart() {
 /* ---- ActivityFeed ---- */
 function ActivityFeed() {
   return (
-    <div className="glass" style={{ borderRadius: "var(--r-lg)", padding: 22, height: "100%", display: "flex", flexDirection: "column" }}>
+    <div style={{ borderRadius: "var(--r-lg)", padding: 22, height: "100%", display: "flex", flexDirection: "column", background: "var(--surface-1)", border: "1px solid var(--border)", boxShadow: "var(--shadow-card)" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
         <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>Recent activity</h3>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, color: "var(--pos)" }}>
@@ -119,7 +119,7 @@ function ActivityFeed() {
 /* ---- RecentQueries ---- */
 function RecentQueries() {
   return (
-    <div className="glass" style={{ borderRadius: "var(--r-lg)", padding: 24 }}>
+    <div style={{ borderRadius: "var(--r-lg)", padding: 24, background: "var(--surface-1)", border: "1px solid var(--border)", boxShadow: "var(--shadow-card)" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
         <div>
           <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>Recent queries</h3>
@@ -157,7 +157,7 @@ export default function DashboardScreen() {
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minWidth: 0 }}>
       <header style={{
         flex: "none", height: 64, display: "flex", alignItems: "center", gap: 14,
-        padding: "0 30px", borderBottom: "1px solid var(--border)", background: "rgba(10,15,30,0.6)", backdropFilter: "blur(10px)"
+        padding: "0 30px", borderBottom: "1px solid var(--border)", background: "var(--glass)", backdropFilter: "blur(12px)"
       }}>
         <div>
           <div style={{ fontSize: 16, fontWeight: 600, lineHeight: 1.1 }}>Dashboard</div>
@@ -187,3 +187,5 @@ export default function DashboardScreen() {
     </div>
   )
 }
+
+

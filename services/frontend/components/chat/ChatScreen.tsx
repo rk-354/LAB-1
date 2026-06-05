@@ -56,7 +56,7 @@ function AICard({ variant, streaming, children }: AICardProps) {
       className={"glass ai-sheen-host " + (streaming ? "ai-streaming" : "")}
       style={{
         ...base,
-        background: "linear-gradient(180deg, rgba(26,36,64,0.55), rgba(16,22,40,0.6))",
+        background: "var(--glass)",
         border: "1px solid " + (streaming ? "var(--border-ai)" : "var(--border)"),
         boxShadow: streaming ? "var(--glow-ai)" : "var(--shadow-card)",
       }}
@@ -125,7 +125,7 @@ export function ThinkingRow() {
       <div style={{ flex: "none", paddingTop: 2 }}><Avatar ai size={34} /></div>
       <div className="glass" style={{
         flex: 1, borderRadius: "var(--r-lg)", padding: "18px 22px",
-        border: "1px solid var(--border-ai)", background: "linear-gradient(180deg, rgba(26,36,64,0.5), rgba(16,22,40,0.6))"
+        border: "1px solid var(--border-ai)", background: "var(--glass)"
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
           <div style={{ display: "flex", gap: 4 }}>
@@ -249,7 +249,7 @@ export default function ChatScreen({ dept, cardVariant }: ChatScreenProps) {
       {/* Top bar */}
       <header style={{
         flex: "none", height: 64, display: "flex", alignItems: "center", gap: 14,
-        padding: "0 26px", borderBottom: "1px solid var(--border)", background: "rgba(10,15,30,0.6)",
+        padding: "0 26px", borderBottom: "1px solid var(--border)", background: "var(--glass)",
         backdropFilter: "blur(10px)"
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -278,7 +278,7 @@ export default function ChatScreen({ dept, cardVariant }: ChatScreenProps) {
       </header>
 
       {/* Thread */}
-      <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: "28px 26px 8px" }}>
+      <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: "28px 26px 8px", background: "var(--bg-navy)" }}>
         <div style={{ maxWidth: 820, margin: "0 auto", display: "flex", flexDirection: "column", gap: 26, paddingBottom: 10 }}>
           {thread.length <= 2 && (
             <div className="fade-in" style={{
@@ -338,7 +338,7 @@ export default function ChatScreen({ dept, cardVariant }: ChatScreenProps) {
 
           <div style={{
             display: "flex", alignItems: "flex-end", gap: 10, padding: "10px 10px 10px 16px",
-            borderRadius: 18, background: "rgba(8,12,22,0.7)",
+            borderRadius: 18, background: "var(--input-bg)",
             border: "1px solid " + (focused ? "transparent" : "var(--border)"),
             animation: focused ? "glow-pulse 2.6s var(--ease) infinite" : "none",
             transition: "border-color var(--dur) var(--ease)",
