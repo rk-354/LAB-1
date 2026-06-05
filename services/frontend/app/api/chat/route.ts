@@ -2,6 +2,9 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
+import { scanAndMask } from '@/lib/llm/pii'
+import { retrieveChunks, buildRAGPrompt } from '@/lib/rag/retrieval'
+import { chat } from '@/lib/llm/router'
 
 const ChatSchema = z.object({
   session_id: z.string().uuid().optional(),
@@ -9,7 +12,7 @@ const ChatSchema = z.object({
   department_slug: z.string(),
 })
 
-// GET /api/chat?session_id=xxx — get message history for a session
+// GET /api/chat?session_id=xxx
 export async function GET(req: Request) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -29,7 +32,7 @@ export async function GET(req: Request) {
   return NextResponse.json({ data, error: null })
 }
 
-// POST /api/chat — send a message, get AI response (SSE streaming)
+// POST /api/chat — real RAG pipeline
 export async function POST(req: Request) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -39,61 +42,121 @@ export async function POST(req: Request) {
     const body = ChatSchema.parse(await req.json())
     const admin = createAdminClient()
 
+    // 1. PII scan
+    const piiResult = scanAndMask(body.message)
+    const safeQuery = piiResult.masked
+
     // Get or create session
     let sessionId = body.session_id
     if (!sessionId) {
       const { data: session } = await admin
         .from('chat_sessions')
-        .insert({ user_id: user.id, department_slug: body.department_slug })
+        .insert({
+          user_id: user.id,
+          department_slug: body.department_slug,
+          title: body.message.slice(0, 80),
+        })
         .select('id')
         .single()
       sessionId = session?.id
     }
 
     // Save user message
-    await admin.from('chat_messages').insert({
+    const { data: userMsg } = await admin.from('chat_messages').insert({
       session_id: sessionId,
       role: 'user',
       content: body.message,
-    })
+      has_pii: piiResult.hasPII,
+      pii_masked: piiResult.hasPII,
+    }).select('id').single()
 
-    // TODO: PII scan → RAG retrieval → LLM call (implemented in next phase)
-    // For now: return a structured placeholder so the UI works end-to-end
-    const placeholderResponse = {
-      session_id: sessionId,
-      message: 'RAG pipeline is being connected. Ollama + pgvector retrieval coming next.',
-      citations: [],
-      model_used: 'ollama/llama3.2:3b',
-      provider: 'ollama',
+    // Log PII detection
+    if (piiResult.hasPII && userMsg) {
+      await admin.from('pii_detections').insert({
+        message_id: userMsg.id,
+        user_id: user.id,
+        pii_types: piiResult.types,
+        masked: true,
+      })
     }
 
-    // Save assistant message
-    const { data: aiMsg } = await admin
-      .from('chat_messages')
-      .insert({
-        session_id: sessionId,
-        role: 'assistant',
-        content: placeholderResponse.message,
-        citations: placeholderResponse.citations,
-        model_used: placeholderResponse.model_used,
-        provider: placeholderResponse.provider,
-      })
-      .select('id')
-      .single()
+    // 2. Retrieve relevant chunks
+    const chunks = await retrieveChunks(safeQuery, body.department_slug, 5, 0.3)
 
-    // Log token usage
+    // 3. Build prompt and call LLM
+    let responseContent: string
+    let citations: { id: number; doc: string; page: string; dept: string }[] = []
+    let llmMeta: { model: string; provider: 'ollama' | 'anthropic'; input_tokens: number; output_tokens: number } = { model: 'llama3.2:3b', provider: 'ollama', input_tokens: 0, output_tokens: 0 }
+
+    if (chunks.length > 0) {
+      const systemPrompt = buildRAGPrompt(safeQuery, chunks, body.department_slug)
+      const llmResponse = await chat([{ role: 'user', content: safeQuery }], systemPrompt)
+
+      responseContent = llmResponse.content
+      llmMeta = {
+        model: llmResponse.model,
+        provider: llmResponse.provider,
+        input_tokens: llmResponse.input_tokens,
+        output_tokens: llmResponse.output_tokens,
+      }
+
+      citations = chunks.map((c, i) => ({
+        id: i + 1,
+        doc: c.metadata.filename || 'Unknown',
+        page: c.metadata.page ? `p.${c.metadata.page}` : '',
+        dept: c.metadata.department || body.department_slug,
+      }))
+    } else {
+      // No relevant chunks found
+      const llmResponse = await chat(
+        [{ role: 'user', content: safeQuery }],
+        `You are a helpful assistant for a refinery's ${body.department_slug} department. No specific documents were found for this query. Provide general guidance and suggest the user upload relevant documents.`
+      )
+      responseContent = llmResponse.content
+      llmMeta = {
+        model: llmResponse.model,
+        provider: llmResponse.provider,
+        input_tokens: llmResponse.input_tokens,
+        output_tokens: llmResponse.output_tokens,
+      }
+    }
+
+    // 4. Save AI response
+    const { data: aiMsg } = await admin.from('chat_messages').insert({
+      session_id: sessionId,
+      role: 'assistant',
+      content: responseContent,
+      citations: citations,
+      model_used: llmMeta.model,
+      provider: llmMeta.provider,
+      input_tokens: llmMeta.input_tokens,
+      output_tokens: llmMeta.output_tokens,
+    }).select('id').single()
+
+    // 5. Log token usage
     await admin.from('token_usage').insert({
       user_id: user.id,
       session_id: sessionId,
       message_id: aiMsg?.id,
-      model: 'llama3.2:3b',
-      provider: 'ollama',
-      input_tokens: 0,
-      output_tokens: 0,
+      model: llmMeta.model,
+      provider: llmMeta.provider,
+      input_tokens: llmMeta.input_tokens,
+      output_tokens: llmMeta.output_tokens,
     })
 
-    return NextResponse.json({ data: placeholderResponse, error: null })
+    return NextResponse.json({
+      data: {
+        session_id: sessionId,
+        message: responseContent,
+        citations,
+        model_used: llmMeta.model,
+        provider: llmMeta.provider,
+        chunks_used: chunks.length,
+      },
+      error: null,
+    })
   } catch (e) {
-    return NextResponse.json({ data: null, error: 'Invalid request' }, { status: 400 })
+    const msg = e instanceof Error ? e.message : 'Chat failed'
+    return NextResponse.json({ data: null, error: msg }, { status: 500 })
   }
 }
