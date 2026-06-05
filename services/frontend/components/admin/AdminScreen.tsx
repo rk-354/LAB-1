@@ -240,38 +240,60 @@ function UsersTable() {
 }
 
 // ── Upload Modal ───────────────────────────────────────────
-interface UploadModalProps { file: File; onConfirm: (dept: string) => void; onCancel: () => void; uploading: boolean }
+interface UploadModalProps { file: File; onConfirm: (dept: string, title: string) => void; onCancel: () => void; uploading: boolean }
 function UploadModal({ file, onConfirm, onCancel, uploading }: UploadModalProps) {
   const [dept, setDept] = useState('hr')
+  const [title, setTitle] = useState(file.name.replace(/\.[^.]+$/, ''))
+
+  const inp: React.CSSProperties = {
+    width: '100%', height: 40, padding: '0 12px', borderRadius: 10, boxSizing: 'border-box',
+    background: 'var(--input-bg)', border: '1px solid var(--border)',
+    color: 'var(--text-1)', fontSize: 13.5, outline: 'none',
+  }
+
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'grid', placeItems: 'center',
       background: 'rgba(6,9,18,0.72)', backdropFilter: 'blur(6px)' }}>
-      <div style={{ borderRadius: 20, padding: 28, width: 400, maxWidth: '90vw',
+      <div style={{ borderRadius: 20, padding: 28, width: 420, maxWidth: '90vw',
         background: 'var(--surface-1)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-elevated)' }}>
         <h3 style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 700 }}>Upload document</h3>
-        <p style={{ margin: '0 0 20px', fontSize: 13, color: 'var(--text-3)' }}>
+        <p style={{ margin: '0 0 18px', fontSize: 13, color: 'var(--text-3)' }}>
           {file.name} · {formatBytes(file.size)}
         </p>
+        <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: 6 }}>Title</label>
+        <input style={{ ...inp, marginBottom: 16 }} value={title} placeholder="Document title"
+          onChange={e => setTitle(e.target.value)} disabled={uploading} />
         <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: 8 }}>Department</label>
         <div style={{ display: 'flex', gap: 10, marginBottom: 22 }}>
           {[{ id: 'hr', label: 'Human Resources' }, { id: 'operations', label: 'Operations' }].map(d => (
-            <button key={d.id} onClick={() => setDept(d.id)} style={{
+            <button key={d.id} onClick={() => setDept(d.id)} disabled={uploading} style={{
               flex: 1, height: 40, borderRadius: 10, border: '1px solid',
               borderColor: dept === d.id ? 'var(--border-ai)' : 'var(--border)',
               background: dept === d.id ? 'var(--indigo-soft)' : 'transparent',
               color: dept === d.id ? 'var(--indigo)' : 'var(--text-2)',
-              fontSize: 13.5, fontWeight: dept === d.id ? 600 : 400, cursor: 'pointer',
+              fontSize: 13.5, fontWeight: dept === d.id ? 600 : 400, cursor: uploading ? 'default' : 'pointer',
               transition: 'all var(--dur) var(--ease)' }}>{d.label}</button>
           ))}
         </div>
+        {uploading && (
+          <div style={{ marginBottom: 14, padding: '10px 13px', borderRadius: 9,
+            background: 'var(--indigo-soft)', border: '1px solid var(--border-ai)',
+            fontSize: 12.5, color: 'var(--indigo)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ width: 12, height: 12, borderRadius: '50%', border: '2px solid rgba(99,102,241,0.3)',
+              borderTopColor: 'var(--indigo)', animation: 'spin 0.7s linear infinite', flex: 'none' }} />
+            Uploading and indexing — this may take a moment…
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 10 }}>
           <button onClick={onCancel} disabled={uploading} style={{ flex: 1, height: 42, borderRadius: 11,
-            border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-2)', fontSize: 14, cursor: 'pointer' }}>Cancel</button>
-          <button onClick={() => onConfirm(dept)} disabled={uploading} style={{ flex: 2, height: 42, borderRadius: 11,
-            border: 'none', background: 'var(--ai-grad)', color: '#fff', fontSize: 14, fontWeight: 600,
-            cursor: uploading ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+            border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-2)', fontSize: 14,
+            cursor: uploading ? 'default' : 'pointer', opacity: uploading ? 0.5 : 1 }}>Cancel</button>
+          <button onClick={() => onConfirm(dept, title.trim() || file.name.replace(/\.[^.]+$/, ''))} disabled={uploading}
+            style={{ flex: 2, height: 42, borderRadius: 11, border: 'none', background: 'var(--ai-grad)',
+              color: '#fff', fontSize: 14, fontWeight: 600, cursor: uploading ? 'wait' : 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
             {uploading
-              ? <><span style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', animation: 'spin 0.7s linear infinite' }} />Uploading…</>
+              ? <><span style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', animation: 'spin 0.7s linear infinite' }} />Processing…</>
               : <><I.upload size={15} /> Upload & Index</>}
           </button>
         </div>
@@ -284,21 +306,23 @@ function UploadModal({ file, onConfirm, onCancel, uploading }: UploadModalProps)
 interface ApiDoc {
   id: string; title: string; department_slug: string; doc_type: string
   current_version: number; updated_at: string
-  document_versions?: { file_size: number; indexing_status: string }[]
+  document_versions?: { id?: string; file_size: number; indexing_status: string }[]
 }
 
-function statusOf(doc: ApiDoc): 'Indexed' | 'Processing' | 'Review' {
+function statusOf(doc: ApiDoc): 'Indexed' | 'Processing' | 'Error' | 'Review' {
   const s = doc.document_versions?.[0]?.indexing_status
   if (s === 'ready') return 'Indexed'
   if (s === 'processing' || s === 'pending') return 'Processing'
+  if (s === 'error') return 'Error'
   return 'Review'
 }
 
-interface DocLibraryProps { docs: ApiDoc[]; setDocs: React.Dispatch<React.SetStateAction<ApiDoc[]>>; loading: boolean; reload: () => void }
-function DocLibrary({ docs, setDocs, loading, reload }: DocLibraryProps) {
+interface DocLibraryProps { docs: ApiDoc[]; setDocs: React.Dispatch<React.SetStateAction<ApiDoc[]>>; loading: boolean; reload: () => void; error?: string | null }
+function DocLibrary({ docs, setDocs, loading, reload, error: fetchError }: DocLibraryProps) {
   const [q, setQ] = useState('')
   const [pendingFile, setPendingFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [retrying, setRetrying] = useState<string | null>(null)
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
   const uploadId = 'doc-upload-input'
 
@@ -317,41 +341,61 @@ function DocLibrary({ docs, setDocs, loading, reload }: DocLibraryProps) {
     return () => clearTimeout(timer)
   }, [docs, reload])
 
-  const handleUpload = async (dept: string) => {
+  const handleUpload = async (dept: string, title: string) => {
     if (!pendingFile) return
     setUploading(true)
     try {
       const form = new FormData()
       form.append('file', pendingFile)
       form.append('department_slug', dept)
+      form.append('title', title)
       form.append('doc_type', 'general')
       const res = await fetch('/api/documents/upload', { method: 'POST', body: form, credentials: 'include' })
       let json: { data?: { document_id?: string; indexing_status?: string; chunks_indexed?: number }; error?: string }
       try { json = await res.json() } catch { json = { error: `Server error ${res.status}` } }
       if (!res.ok || json.error) { showToast(json.error || `HTTP ${res.status}`, false); return }
 
-      // Use real indexing_status from response (ingestion runs inline, so it may already be 'ready')
       const realStatus = json.data?.indexing_status || 'pending'
-      const chunksMsg = json.data?.chunks_indexed ? ` · ${json.data.chunks_indexed} chunks indexed` : ''
+      const chunks = json.data?.chunks_indexed ?? 0
 
       const optimistic: ApiDoc = {
         id: json.data?.document_id || `tmp-${Date.now()}`,
-        title: pendingFile.name.replace(/\.[^.]+$/, ''),
+        title,
         department_slug: dept, doc_type: 'general',
         current_version: 1, updated_at: new Date().toISOString(),
         document_versions: [{ file_size: pendingFile.size, indexing_status: realStatus }],
       }
       setDocs(prev => [optimistic, ...prev])
-      showToast(
-        realStatus === 'ready'
-          ? `"${pendingFile.name}" indexed${chunksMsg}`
-          : `"${pendingFile.name}" uploaded — indexing in progress`,
-        true
-      )
-      // Reload from DB to get the canonical record
+
+      if (realStatus === 'ready') {
+        showToast(`"${title}" indexed — ${chunks} chunk${chunks !== 1 ? 's' : ''} ready for search`, true)
+      } else if (realStatus === 'error') {
+        showToast(`"${title}" saved to storage but indexing failed — use Retry to re-index`, false)
+      } else {
+        showToast(`"${title}" uploaded — indexing in progress`, true)
+      }
+
       setTimeout(reload, 1500)
     } catch (e) { showToast(e instanceof Error ? e.message : 'Upload failed', false) }
     finally { setUploading(false); setPendingFile(null) }
+  }
+
+  const retryIngest = async (docId: string, docTitle: string) => {
+    setRetrying(docId)
+    try {
+      const res = await fetch('/api/documents/ingest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ document_id: docId, version_number: 1 }),
+        credentials: 'include',
+      })
+      const json = await res.json()
+      if (!res.ok || json.error) { showToast(json.error || 'Re-indexing failed', false); return }
+      const chunks = json.data?.chunks_indexed ?? 0
+      showToast(`"${docTitle}" re-indexed — ${chunks} chunk${chunks !== 1 ? 's' : ''} ready`, true)
+      reload()
+    } catch (e) { showToast('Re-indexing failed', false) }
+    finally { setRetrying(null) }
   }
 
   const deleteDoc = async (id: string, title: string) => {
@@ -395,7 +439,7 @@ function DocLibrary({ docs, setDocs, loading, reload }: DocLibraryProps) {
             <I.upload size={15} /> Upload
           </label>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '2.2fr 1.2fr 0.6fr 1fr 1fr 70px', gap: 10, padding: '10px 18px',
+        <div style={{ display: 'grid', gridTemplateColumns: '2.2fr 1.2fr 0.6fr 1fr 1fr 100px', gap: 10, padding: '10px 18px',
           fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--text-4)',
           borderBottom: '1px solid var(--border-soft)' }}>
           <span>Document</span><span>Department</span><span>Ver</span><span>Updated</span><span>Status</span><span></span>
@@ -404,44 +448,64 @@ function DocLibrary({ docs, setDocs, loading, reload }: DocLibraryProps) {
           <div style={{ padding: '24px 18px', display: 'flex', flexDirection: 'column', gap: 12 }}>
             {[1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 44, borderRadius: 10 }} />)}
           </div>
+        ) : fetchError ? (
+          <div style={{ padding: '48px 18px', textAlign: 'center', color: 'var(--neg)', fontSize: 13.5 }}>
+            {fetchError}
+          </div>
         ) : filtered.length === 0 ? (
           <div style={{ padding: '48px 18px', textAlign: 'center', color: 'var(--text-3)', fontSize: 13.5 }}>
             No documents yet. Click <strong style={{ color: 'var(--text-1)' }}>Upload</strong> to add your first document.
           </div>
-        ) : filtered.map((d, i) => (
-          <div key={d.id} style={{
-            display: 'grid', gridTemplateColumns: '2.2fr 1.2fr 0.6fr 1fr 1fr 70px', gap: 10,
-            alignItems: 'center', padding: '12px 18px',
-            borderBottom: i < filtered.length - 1 ? '1px solid var(--border-soft)' : 'none',
-            transition: 'background var(--dur) var(--ease)' }}
-            onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = 'var(--bg-hover)'}
-            onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = 'transparent'}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-              <div style={{ width: 32, height: 32, borderRadius: 8, flex: 'none', display: 'grid', placeItems: 'center',
-                background: 'var(--indigo-soft)', border: '1px solid var(--border-ai)', color: 'var(--indigo)' }}>
-                <I.doc size={15} />
+        ) : filtered.map((d, i) => {
+          const docStatus = statusOf(d)
+          const isRetrying = retrying === d.id
+          return (
+            <div key={d.id} style={{
+              display: 'grid', gridTemplateColumns: '2.2fr 1.2fr 0.6fr 1fr 1fr 100px', gap: 10,
+              alignItems: 'center', padding: '12px 18px',
+              borderBottom: i < filtered.length - 1 ? '1px solid var(--border-soft)' : 'none',
+              transition: 'background var(--dur) var(--ease)' }}
+              onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = 'var(--bg-hover)'}
+              onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = 'transparent'}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                <div style={{ width: 32, height: 32, borderRadius: 8, flex: 'none', display: 'grid', placeItems: 'center',
+                  background: 'var(--indigo-soft)', border: '1px solid var(--border-ai)', color: 'var(--indigo)' }}>
+                  <I.doc size={15} />
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.title}</div>
+                  <div style={{ fontSize: 11.5, color: 'var(--text-4)' }}>{formatBytes(d.document_versions?.[0]?.file_size ?? 0)}</div>
+                </div>
               </div>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.title}</div>
-                <div style={{ fontSize: 11.5, color: 'var(--text-4)' }}>{formatBytes(d.document_versions?.[0]?.file_size ?? 0)}</div>
+              <span className="badge badge-user" style={{ fontSize: 11 }}>{d.department_slug}</span>
+              <span style={{ fontSize: 13, color: 'var(--text-2)' }}>v{d.current_version}</span>
+              <span style={{ fontSize: 12.5, color: 'var(--text-3)' }}>{formatDate(d.updated_at)}</span>
+              <StatusChip status={docStatus} />
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 4 }}>
+                {docStatus === 'Error' && (
+                  <button title="Retry indexing" onClick={() => retryIngest(d.id, d.title)} disabled={isRetrying} style={{
+                    width: 30, height: 30, borderRadius: 8, border: '1px solid rgba(252,211,77,0.3)',
+                    background: 'rgba(252,211,77,0.08)', color: 'var(--warn)', cursor: isRetrying ? 'wait' : 'pointer',
+                    display: 'grid', placeItems: 'center', transition: 'all var(--dur) var(--ease)' }}
+                    onMouseEnter={e => { if (!isRetrying) { const b = e.currentTarget as HTMLButtonElement; b.style.background = 'rgba(252,211,77,0.18)' } }}
+                    onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = 'rgba(252,211,77,0.08)' }}>
+                    {isRetrying
+                      ? <span style={{ width: 10, height: 10, borderRadius: '50%', border: '2px solid rgba(252,211,77,0.3)', borderTopColor: 'var(--warn)', animation: 'spin 0.7s linear infinite' }} />
+                      : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>}
+                  </button>
+                )}
+                <button title="Delete document" onClick={() => deleteDoc(d.id, d.title)} style={{
+                  width: 30, height: 30, borderRadius: 8, border: '1px solid transparent', background: 'transparent',
+                  color: 'var(--text-4)', cursor: 'pointer', display: 'grid', placeItems: 'center',
+                  transition: 'all var(--dur) var(--ease)' }}
+                  onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = 'rgba(248,113,113,0.1)'; b.style.color = 'var(--neg)'; b.style.borderColor = 'rgba(248,113,113,0.3)' }}
+                  onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = 'transparent'; b.style.color = 'var(--text-4)'; b.style.borderColor = 'transparent' }}>
+                  <I.x size={14} />
+                </button>
               </div>
             </div>
-            <span className="badge badge-user" style={{ fontSize: 11 }}>{d.department_slug}</span>
-            <span style={{ fontSize: 13, color: 'var(--text-2)' }}>v{d.current_version}</span>
-            <span style={{ fontSize: 12.5, color: 'var(--text-3)' }}>{formatDate(d.updated_at)}</span>
-            <StatusChip status={statusOf(d)} />
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <button title="Delete document" onClick={() => deleteDoc(d.id, d.title)} style={{
-                width: 30, height: 30, borderRadius: 8, border: '1px solid transparent', background: 'transparent',
-                color: 'var(--text-4)', cursor: 'pointer', display: 'grid', placeItems: 'center',
-                transition: 'all var(--dur) var(--ease)' }}
-                onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = 'rgba(248,113,113,0.1)'; b.style.color = 'var(--neg)'; b.style.borderColor = 'rgba(248,113,113,0.3)' }}
-                onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = 'transparent'; b.style.color = 'var(--text-4)'; b.style.borderColor = 'transparent' }}>
-                <I.x size={14} />
-              </button>
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </>
   )
@@ -453,13 +517,21 @@ interface LogEntry { id: string; action: string; resource: string | null; depart
 function AuditLogs() {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [loading, setLoading] = useState(true)
+  const [fetchError, setFetchError] = useState<string | null>(null)
 
-  useEffect(() => {
+  const loadLogs = () => {
+    setLoading(true); setFetchError(null)
     fetch('/api/admin/logs', { credentials: 'include' })
-      .then(r => r.ok ? r.json() : null)
-      .then(json => { if (json?.data) setLogs(json.data) })
+      .then(async r => {
+        const json = await r.json()
+        if (json.error) { setFetchError(json.error); return }
+        if (json.data) setLogs(json.data)
+      })
+      .catch(() => setFetchError('Network error — could not load audit logs'))
       .finally(() => setLoading(false))
-  }, [])
+  }
+
+  useEffect(() => { loadLogs() }, [])
 
   const ACTION_COLORS: Record<string, string> = {
     upload_doc: 'var(--indigo)', index_doc: 'var(--pos)', delete_doc: 'var(--neg)',
@@ -473,7 +545,7 @@ function AuditLogs() {
           <div style={{ fontSize: 14, fontWeight: 600 }}>Audit Log</div>
           <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>Last 50 actions — append-only</div>
         </div>
-        <button onClick={() => { setLoading(true); fetch('/api/admin/logs', { credentials: 'include' }).then(r => r.json()).then(j => { if (j.data) setLogs(j.data) }).finally(() => setLoading(false)) }}
+        <button onClick={loadLogs}
           style={{ height: 34, padding: '0 12px', borderRadius: 9, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-2)', fontSize: 13, cursor: 'pointer' }}>
           Refresh
         </button>
@@ -487,6 +559,8 @@ function AuditLogs() {
         <div style={{ padding: '24px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
           {[1,2,3,4,5].map(i => <div key={i} className="skeleton" style={{ height: 36, borderRadius: 8 }} />)}
         </div>
+      ) : fetchError ? (
+        <div style={{ padding: '40px 18px', textAlign: 'center', color: 'var(--neg)', fontSize: 13.5 }}>{fetchError}</div>
       ) : logs.length === 0 ? (
         <div style={{ padding: '40px 18px', textAlign: 'center', color: 'var(--text-3)', fontSize: 13.5 }}>No audit logs yet.</div>
       ) : logs.map((l, i) => (
@@ -600,15 +674,22 @@ export default function AdminScreen({ tab }: AdminScreenProps) {
   const [docs, setDocs] = useState<ApiDoc[]>([])
   const [docsLoading, setDocsLoading] = useState(false)
   const [docsFetched, setDocsFetched] = useState(false)
+  const [docsError, setDocsError] = useState<string | null>(null)
 
   const reloadDocs = useCallback(async () => {
     setDocsLoading(true)
     try {
       const res = await fetch('/api/documents', { credentials: 'include' })
-      if (!res.ok) return
       const json = await res.json()
-      if (json.data) setDocs(json.data)
+      if (!res.ok || json.error) {
+        setDocsError(json?.error || `HTTP ${res.status}`)
+        return
+      }
+      setDocs(json.data ?? [])
       setDocsFetched(true)
+      setDocsError(null)
+    } catch (e) {
+      setDocsError('Network error — could not load documents')
     } finally { setDocsLoading(false) }
   }, [])
 
@@ -650,7 +731,7 @@ export default function AdminScreen({ tab }: AdminScreenProps) {
       <div style={{ flex: 1, overflowY: 'auto', padding: '24px 28px 40px' }}>
         <div className="fade-in" style={{ maxWidth: 1180, margin: '0 auto' }}>
           {tab === 'users' && <UsersTable />}
-          {tab === 'documents' && <DocLibrary docs={docs} setDocs={setDocs} loading={docsLoading && !docsFetched} reload={reloadDocs} />}
+          {tab === 'documents' && <DocLibrary docs={docs} setDocs={setDocs} loading={docsLoading && !docsFetched} reload={reloadDocs} error={docsError} />}
           {tab === 'logs' && <AuditLogs />}
           {tab === 'settings' && <Settings />}
           {tab === 'departments' && (

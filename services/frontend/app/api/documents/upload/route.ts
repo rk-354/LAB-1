@@ -63,8 +63,8 @@ export async function POST(req: Request) {
   }
 
   // Upload to Supabase Storage
-  const ext = ALLOWED_TYPES[file.type]
-  const storagePath = `${departmentSlug}/${doc.id}/v1/${Date.now()}-${file.name}`
+  const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+  const storagePath = `${departmentSlug}/${doc.id}/v1/${Date.now()}-${safeFileName}`
 
   const { error: uploadErr } = await admin.storage
     .from('refinery-docs')
@@ -103,7 +103,7 @@ export async function POST(req: Request) {
     p_resource: 'document',
     p_resource_id: doc.id,
     p_dept_slug: departmentSlug,
-    p_metadata: { file_name: file.name, file_size: file.size, mime_type: file.type, ext },
+    p_metadata: { file_name: file.name, file_size: file.size, mime_type: file.type },
   })
 
   // Run ingestion inline — no HTTP self-call, no auth issues, immediate result

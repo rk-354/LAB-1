@@ -179,16 +179,17 @@ export const CiteText = ({ text }: CiteTextProps) => {
 
 /* ---- StatusChip ---- */
 interface StatusChipProps {
-  status: 'Indexed' | 'Processing' | 'Review';
+  status: 'Indexed' | 'Processing' | 'Review' | 'Error';
 }
 
 export const StatusChip = ({ status }: StatusChipProps) => {
   const map: Record<string, { c: string; bg: string; bd: string }> = {
-    Indexed:    { c: "var(--pos)",  bg: "rgba(110,231,183,0.12)", bd: "rgba(110,231,183,0.28)" },
-    Processing: { c: "var(--warn)", bg: "rgba(252,211,77,0.12)",  bd: "rgba(252,211,77,0.28)" },
-    Review:     { c: "var(--neg)",  bg: "rgba(251,113,133,0.12)", bd: "rgba(251,113,133,0.28)" },
+    Indexed:    { c: "var(--pos)",           bg: "rgba(110,231,183,0.12)", bd: "rgba(110,231,183,0.28)" },
+    Processing: { c: "var(--warn)",          bg: "rgba(252,211,77,0.12)",  bd: "rgba(252,211,77,0.28)" },
+    Error:      { c: "var(--neg)",           bg: "rgba(251,113,133,0.12)", bd: "rgba(251,113,133,0.28)" },
+    Review:     { c: "rgba(148,163,184,1)",  bg: "rgba(148,163,184,0.08)", bd: "rgba(148,163,184,0.22)" },
   }
-  const s = map[status] ?? map.Indexed
+  const s = map[status] ?? map.Review
   return (
     <span className="badge" style={{ background: s.bg, color: s.c, border: `1px solid ${s.bd}` }}>
       <span className="dot" style={{ background: s.c, boxShadow: `0 0 7px ${s.c}` }} />

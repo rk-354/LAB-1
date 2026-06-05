@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 
-// GET /api/documents?dept=hr — list documents for the current user's department
+// GET /api/documents?dept=hr — list documents (optionally filtered by department)
 export async function GET(req: Request) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -12,16 +12,10 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const dept = searchParams.get('dept')
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('department, roles(name)')
-    .eq('id', user.id)
-    .single()
-
-  const isAdmin = (profile?.roles as unknown as { name: string })?.name === 'admin'
-  const targetDept = dept || profile?.department
-
-  let query = supabase
+  // Use service-role client to bypass RLS — access is gated by auth above.
+  // The optional ?dept= param narrows results; omitting it returns all departments.
+  const admin = createAdminClient()
+  let query = admin
     .from('documents')
     .select(`
       id, title, description, department_slug, doc_type, tags,
@@ -30,9 +24,11 @@ export async function GET(req: Request) {
     `)
     .eq('is_active', true)
     .order('updated_at', { ascending: false })
+    .order('version_number', { ascending: false, foreignTable: 'document_versions' })
 
-  if (!isAdmin && targetDept) query = query.eq('department_slug', targetDept)
-  else if (targetDept && targetDept !== 'all') query = query.eq('department_slug', targetDept)
+  if (dept && dept !== 'all') {
+    query = query.eq('department_slug', dept)
+  }
 
   const { data, error } = await query
   if (error) return NextResponse.json({ data: null, error: error.message }, { status: 500 })
