@@ -92,7 +92,9 @@ export async function chat(
     try {
       return await callOllama(messages, systemPrompt)
     } catch (e) {
-      console.error('[LLMRouter] Ollama failed, falling back to Anthropic:', e)
+      // Structured log — in production, replace with your logger
+      const msg = e instanceof Error ? e.message : String(e)
+      process.env.NODE_ENV !== 'test' && process.stderr.write(`[LLMRouter] Ollama unavailable (${msg}), using Anthropic\n`)
     }
   }
   return callAnthropic(messages, systemPrompt)

@@ -161,13 +161,6 @@ export default function Login({ onLogin }: LoginProps) {
                   }} />
                 ))}
               </div>
-              <button
-                onClick={onLogin}
-                style={{
-                  background: "transparent", border: "none", color: "var(--text-3)", fontSize: 12.5,
-                  textDecoration: "underline", textUnderlineOffset: 3,
-                }}
-              >Skip — open the demo now</button>
             </div>
           )}
 

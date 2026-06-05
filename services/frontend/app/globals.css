@@ -216,3 +216,5 @@ body.motion-subtle .ai-grad-border.flowing { animation: none !important; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; }
 }
+
+@keyframes spin { to { transform: rotate(360deg); } }

@@ -10,21 +10,18 @@ RefinerIQ is a tech capability demo showcasing enterprise-grade AI infrastructur
 
 | Capability | Technology |
 |---|---|
-| Multi-Agent Orchestration | LangGraph |
-| RAG Pipeline | LangChain + ChromaDB |
-| Local LLM | Ollama (Llama 3.2, Mistral) |
-| 3rd Party LLMs | OpenAI, Anthropic, Groq |
-| OCR | Tesseract / PaddleOCR |
-| SQL Database | PostgreSQL |
-| Vector Database | ChromaDB |
-| Search | Elasticsearch |
-| File Storage | MinIO |
-| Caching | Redis |
-| PII Protection | Microsoft Presidio |
-| Frontend | Next.js 14 |
-| Backend | FastAPI (Python) |
+| Frontend + API | Next.js 14 (App Router), TypeScript |
+| Auth | Supabase Auth + Resend (magic link) |
+| Database | Supabase PostgreSQL + pgvector |
+| File Storage | Supabase Storage |
+| Vector Search | Supabase pgvector (nomic-embed-text 768-dim) |
+| Keyword Search | Elasticsearch (Docker) |
+| Local LLM | Ollama — llama3.2:3b |
+| Cloud LLM | Anthropic Claude (fallback) |
+| OCR | Gemini API (scanned docs) |
+| Embeddings | Ollama nomic-embed-text |
 | CI/CD | GitHub Actions |
-| Logging | Structured JSON + Sentry |
+| Deployment | Cloudflare Pages (frontend) |
 
 ## Environments
 
@@ -39,18 +36,15 @@ RefinerIQ is a tech capability demo showcasing enterprise-grade AI infrastructur
 ```
 refinery-intelligence-platform/
 ├── .github/              # CI/CD workflows, issue templates
-├── docs/                 # PRD, architecture, database, design docs
+├── docs/                 # PRD, architecture, design docs
 ├── services/
-│   ├── api/              # FastAPI backend
-│   ├── frontend/         # Next.js chatbot UI
-│   ├── agents/           # Multi-agent system (LangGraph)
-│   ├── ingestion/        # Document ingestion pipeline
-│   └── ocr/              # OCR microservice
-├── infrastructure/
-│   ├── docker/           # Dockerfiles
-│   └── environments/     # Per-env configs
-├── tests/                # Unit, integration, e2e
-└── scripts/              # Dev utilities
+│   └── frontend/         # Next.js 14 app (UI + all API routes)
+│       ├── app/api/      # Backend API routes
+│       ├── components/   # UI components
+│       └── lib/          # Supabase, LLM, RAG utilities
+├── supabase/             # DB migrations + seed data
+├── infrastructure/       # Docker compose (Elasticsearch)
+└── tests/                # Unit, integration, e2e
 ```
 
 ## Quick Start

@@ -76,3 +76,10 @@ tmp/
 # OS
 .DS_Store
 *.tmp
+
+# Design import artifacts
+design_extract/
+*_raw.html
+
+# Frontend env (has real keys)
+services/frontend/.env.local

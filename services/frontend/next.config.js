@@ -1,3 +1,5 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {}
+const nextConfig = {
+  serverExternalPackages: ['pdf-parse', 'mammoth', 'xlsx'],
+}
 module.exports = nextConfig
