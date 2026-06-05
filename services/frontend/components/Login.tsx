@@ -121,10 +121,18 @@ export default function Login({ onLogin }: LoginProps) {
                 />
               </div>
 
+              {error && (
+                <p style={{ margin: "0 0 14px", fontSize: 13, color: "var(--neg)", textAlign: "center",
+                  padding: "10px 14px", borderRadius: 10, background: "rgba(251,113,133,0.08)",
+                  border: "1px solid rgba(251,113,133,0.25)" }}>
+                  {error}
+                </p>
+              )}
+
               <button
                 className="focusable"
                 onClick={submit}
-                disabled={!valid}
+                disabled={!valid || loading}
                 style={{
                   width: "100%", height: 50, borderRadius: 13, border: "none",
                   background: valid ? "var(--ai-grad)" : "rgba(255,255,255,0.06)",
