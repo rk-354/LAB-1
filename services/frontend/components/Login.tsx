@@ -40,27 +40,34 @@ interface LoginProps {
 
 export default function Login({ onLogin }: LoginProps) {
   const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
   const [sent, setSent] = useState(false)
   const [focused, setFocused] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const valid = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)
+  const usePassword = password.length > 0
 
   const submit = async () => {
     if (!valid || loading) return
     setLoading(true)
     setError(null)
     try {
+      const body = usePassword ? { email, password } : { email }
       const res = await fetch('/api/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify(body),
       })
       const json = await res.json()
       if (json.error) { setError(json.error); return }
-      setSent(true)
+      if (usePassword) {
+        onLogin() // password login → go straight to app
+      } else {
+        setSent(true)
+      }
     } catch {
-      setError('Failed to send magic link. Try again.')
+      setError('Sign in failed. Try again.')
     } finally {
       setLoading(false)
     }
@@ -121,6 +128,32 @@ export default function Login({ onLogin }: LoginProps) {
                 />
               </div>
 
+              <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-2)", display: "block", marginBottom: 8 }}>
+                Password <span style={{ color: "var(--text-4)", fontWeight: 400 }}>(optional — leave blank to use magic link)</span>
+              </label>
+              <div style={{
+                display: "flex", alignItems: "center", gap: 10, height: 50, padding: "0 14px",
+                borderRadius: 13, marginBottom: 18,
+                background: "rgba(8,12,22,0.6)",
+                border: "1px solid var(--border)",
+                transition: "border-color var(--dur) var(--ease)",
+              }}>
+                <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"
+                  style={{ color: "var(--text-3)", flex: "none" }}>
+                  <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+                <input
+                  type="password" value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && submit()}
+                  placeholder="Enter password to skip magic link"
+                  style={{
+                    flex: 1, background: "transparent", border: "none", outline: "none",
+                    color: "var(--text-1)", fontSize: 14.5, height: "100%",
+                  }} />
+              </div>
+
               {error && (
                 <p style={{ margin: "0 0 14px", fontSize: 13, color: "var(--neg)", textAlign: "center",
                   padding: "10px 14px", borderRadius: 10, background: "rgba(251,113,133,0.08)",
@@ -149,7 +182,7 @@ export default function Login({ onLogin }: LoginProps) {
                   if (valid) (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 8px 26px -8px rgba(124,109,245,0.7)"
                 }}
               >
-                <I.sparkle size={17} /> Send magic link
+                <I.sparkle size={17} /> {usePassword ? "Sign in" : "Send magic link"}
               </button>
             </>
           ) : (
