@@ -220,13 +220,21 @@ function DocLibrary() {
   const [uploading, setUploading] = useState(false)
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const uploadId = "doc-upload-input"
 
   const fetchDocs = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/documents')
+      const res = await fetch('/api/documents', { credentials: 'include' })
+      if (!res.ok) {
+        console.error('[DocLibrary] fetchDocs error:', res.status, res.statusText)
+        return
+      }
       const json = await res.json()
       if (json.data) setDocs(json.data)
+      else if (json.error) console.error('[DocLibrary] API error:', json.error)
+    } catch (e) {
+      console.error('[DocLibrary] fetchDocs exception:', e)
     } finally {
       setLoading(false)
     }
@@ -249,21 +257,35 @@ function DocLibrary() {
       form.append("department_slug", dept)
       form.append("doc_type", "general")
 
-      const res = await fetch('/api/documents/upload', { method: 'POST', body: form })
-      const json = await res.json()
+      const res = await fetch('/api/documents/upload', {
+        method: 'POST',
+        body: form,
+        credentials: 'include',
+      })
 
-      if (json.error) {
-        setToast({ msg: json.error, ok: false })
+      let json: { data?: unknown; error?: string }
+      try {
+        json = await res.json()
+      } catch {
+        json = { error: `Server error ${res.status}` }
+      }
+
+      if (!res.ok || json.error) {
+        const errMsg = json.error || `HTTP ${res.status}`
+        console.error('[DocLibrary] upload error:', errMsg)
+        setToast({ msg: errMsg, ok: false })
       } else {
         setToast({ msg: `"${pendingFile.name}" uploaded — indexing started`, ok: true })
         await fetchDocs()
       }
-    } catch {
-      setToast({ msg: "Upload failed. Try again.", ok: false })
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Upload failed'
+      console.error('[DocLibrary] upload exception:', e)
+      setToast({ msg, ok: false })
     } finally {
       setUploading(false)
       setPendingFile(null)
-      setTimeout(() => setToast(null), 4000)
+      setTimeout(() => setToast(null), 6000)
     }
   }
 
@@ -300,9 +322,15 @@ function DocLibrary() {
         }}>{toast.msg}</div>
       )}
 
-      <input ref={fileRef} type="file" style={{ display: "none" }}
+      {/* Hidden file input — triggered via label htmlFor */}
+      <input
+        ref={fileRef}
+        id={uploadId}
+        type="file"
+        style={{ position: "absolute", width: 1, height: 1, opacity: 0, overflow: "hidden", zIndex: -1 }}
         accept=".pdf,.docx,.xlsx,.xls,.txt,.png,.jpg,.jpeg"
-        onChange={handleFileSelect} />
+        onChange={handleFileSelect}
+      />
 
       <div className="glass" style={{ borderRadius: "var(--r-lg)", overflow: "hidden" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 20px", borderBottom: "1px solid var(--border)" }}>
@@ -315,13 +343,14 @@ function DocLibrary() {
               style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: "var(--text-1)", fontSize: 13.5 }} />
           </div>
           <div style={{ flex: 1 }} />
-          <button className="focusable" onClick={() => fileRef.current?.click()} style={{
+          <label htmlFor={uploadId} style={{
             display: "flex", alignItems: "center", gap: 8, height: 38, padding: "0 16px", borderRadius: 10,
-            background: "var(--ai-grad)", border: "none", color: "#fff", fontSize: 13.5, fontWeight: 600,
-            boxShadow: "0 6px 18px -8px rgba(124,109,245,0.8)", cursor: "pointer"
+            background: "var(--ai-grad)", color: "#fff", fontSize: 13.5, fontWeight: 600,
+            boxShadow: "0 6px 18px -8px rgba(124,109,245,0.8)", cursor: "pointer",
+            userSelect: "none",
           }}>
             <I.upload size={16} /> Upload
-          </button>
+          </label>
         </div>
 
         <div style={{
