@@ -1,6 +1,8 @@
 // LLM Router — Ollama (primary) → Anthropic (fallback)
 // All LLM calls go through this file. Never call providers directly.
 
+import { logger } from '@/lib/logger'
+
 const OLLAMA_BASE = process.env.OLLAMA_BASE_URL || 'http://localhost:11434'
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3.2:3b'
 
@@ -94,7 +96,7 @@ export async function chat(
     } catch (e) {
       // Structured log — in production, replace with your logger
       const msg = e instanceof Error ? e.message : String(e)
-      process.env.NODE_ENV !== 'test' && process.stderr.write(`[LLMRouter] Ollama unavailable (${msg}), using Anthropic\n`)
+      logger.warn('LLM router: Ollama unavailable, falling back to Anthropic', { error: msg })
     }
   }
   return callAnthropic(messages, systemPrompt)

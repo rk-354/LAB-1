@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { scanAndMask } from '@/lib/llm/pii'
 import { retrieveChunks, buildRAGPrompt } from '@/lib/rag/retrieval'
 import { chat } from '@/lib/llm/router'
+import { logger } from '@/lib/logger'
 
 const ChatSchema = z.object({
   session_id: z.string().uuid().optional(),
@@ -144,6 +145,24 @@ export async function POST(req: Request) {
       provider: llmMeta.provider,
       input_tokens: llmMeta.input_tokens,
       output_tokens: llmMeta.output_tokens,
+    })
+
+    logger.llm({
+      provider: llmMeta.provider,
+      model: llmMeta.model,
+      input_tokens: llmMeta.input_tokens,
+      output_tokens: llmMeta.output_tokens,
+      user_id: user.id,
+      session_id: sessionId,
+    })
+
+    logger.info('chat_response', {
+      user_id: user.id,
+      session_id: sessionId,
+      dept: body.department_slug,
+      chunks_used: chunks.length,
+      has_pii: piiResult.hasPII,
+      provider: llmMeta.provider,
     })
 
     return NextResponse.json({
