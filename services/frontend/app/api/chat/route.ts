@@ -89,7 +89,7 @@ export async function POST(req: Request) {
     // 3. Build prompt and call LLM
     let responseContent: string
     let citations: { id: number; doc: string; page: string; dept: string }[] = []
-    let llmMeta: { model: string; provider: 'ollama' | 'anthropic'; input_tokens: number; output_tokens: number } = { model: 'llama3.2:3b', provider: 'ollama', input_tokens: 0, output_tokens: 0 }
+    let llmMeta: { model: string; provider: 'ollama' | 'nvidia' | 'anthropic'; input_tokens: number; output_tokens: number } = { model: 'llama3.2:3b', provider: 'ollama', input_tokens: 0, output_tokens: 0 }
 
     if (chunks.length > 0) {
       const systemPrompt = buildRAGPrompt(safeQuery, chunks, body.department_slug)
