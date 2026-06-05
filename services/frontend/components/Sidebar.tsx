@@ -4,11 +4,13 @@
    RefinerIQ — App sidebar (collapsible, context-aware)
    ============================================================ */
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Logo, Avatar, RoleBadge, IconBtn } from './ui'
 import { I } from './icons'
-import { DEPARTMENTS, CONVERSATIONS, CURRENT_USER } from '@/lib/data'
+import { DEPARTMENTS, CURRENT_USER } from '@/lib/data'
 import { useTheme } from '@/lib/theme'
+
+interface Session { id: string; title: string | null; department_slug: string | null; updated_at: string }
 
 /* ---- NavItem ---- */
 interface NavItemProps {
@@ -172,6 +174,14 @@ export default function Sidebar({
   onLogout,
 }: SidebarProps) {
   const { theme, toggle } = useTheme()
+  const [sessions, setSessions] = useState<Session[]>([])
+
+  useEffect(() => {
+    if (view !== 'chat') return
+    fetch('/api/chat/sessions', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(json => { if (json?.data) setSessions(json.data) })
+  }, [view, activeConv]) // re-fetch when activeConv changes (new chat created)
 
   const sectionLabel = (t: string) => !collapsed && (
     <div style={{
@@ -243,36 +253,35 @@ export default function Sidebar({
               </div>
             )}
 
-            {!collapsed && (
+            {!collapsed && sessions.length > 0 && (
               <>
                 {sectionLabel("Recent")}
                 <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                  {CONVERSATIONS.map(c => (
+                  {sessions.map(s => (
                     <button
-                      key={c.id}
-                      onClick={() => setActiveConv(c.id)}
+                      key={s.id}
+                      onClick={() => setActiveConv(s.id)}
                       style={{
                         display: "flex", alignItems: "center", gap: 9, width: "100%", padding: "9px 10px",
-                        borderRadius: 9, border: "none", textAlign: "left",
-                        background: activeConv === c.id ? "var(--bg-hover)" : "transparent",
-                        color: activeConv === c.id ? "var(--text-1)" : "var(--text-2)",
+                        borderRadius: 9, border: "none", textAlign: "left", cursor: "pointer",
+                        background: activeConv === s.id ? "var(--bg-hover)" : "transparent",
+                        color: activeConv === s.id ? "var(--text-1)" : "var(--text-2)",
                         transition: "background var(--dur) var(--ease)",
                       }}
                       onMouseEnter={e => {
-                        if (activeConv !== c.id) (e.currentTarget as HTMLButtonElement).style.background = "var(--glass-faint)"
+                        if (activeConv !== s.id) (e.currentTarget as HTMLButtonElement).style.background = "var(--glass-faint)"
                       }}
                       onMouseLeave={e => {
-                        if (activeConv !== c.id) (e.currentTarget as HTMLButtonElement).style.background = "transparent"
+                        if (activeConv !== s.id) (e.currentTarget as HTMLButtonElement).style.background = "transparent"
                       }}
                     >
-                      {c.pinned
-                        ? <I.pin size={13} style={{ flex: "none", color: "var(--violet)" }} />
-                        : <I.chat size={13} style={{ flex: "none", opacity: 0.5 }} />
-                      }
+                      <I.chat size={13} style={{ flex: "none", opacity: 0.5 }} />
                       <span style={{ flex: 1, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.3 }}>
-                        {c.title}
+                        {s.title || "New conversation"}
                       </span>
-                      <span style={{ fontSize: 10.5, color: "var(--text-4)", flex: "none" }}>{c.time}</span>
+                      <span style={{ fontSize: 10, color: "var(--text-4)", flex: "none" }}>
+                        {s.department_slug?.toUpperCase() || ""}
+                      </span>
                     </button>
                   ))}
                 </div>

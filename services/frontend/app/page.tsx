@@ -60,7 +60,7 @@ export default function App() {
         onLogout={handleLogout}
       />
       <main style={{ flex: 1, minWidth: 0, height: '100%', background: 'var(--bg-navy)', position: 'relative' }}>
-        {view === 'chat' && <ChatScreen key={'chat-' + dept + '-' + activeConv} dept={dept} cardVariant='glass' />}
+        {view === 'chat' && <ChatScreen key={'chat-' + dept + '-' + (activeConv ?? 'new')} dept={dept} cardVariant='glass' sessionId={activeConv} />}
         {view === 'dashboard' && <DashboardScreen />}
         {view === 'admin' && <AdminScreen tab={adminTab} />}
       </main>

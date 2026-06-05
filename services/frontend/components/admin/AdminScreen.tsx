@@ -35,21 +35,121 @@ function Toggle({ on, onChange }: ToggleProps) {
   )
 }
 
+/* ---- Invite Modal ---- */
+function InviteModal({ onClose }: { onClose: () => void }) {
+  const [form, setForm] = useState({ email: '', full_name: '', role_id: 3, department: 'hr' })
+  const [loading, setLoading] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const [done, setDone] = useState(false)
+
+  const submit = async () => {
+    if (!form.email || !form.full_name) { setErr('Email and name are required'); return }
+    setLoading(true); setErr(null)
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      })
+      const json = await res.json()
+      if (json.error) { setErr(json.error); return }
+      setDone(true)
+      setTimeout(onClose, 1800)
+    } catch { setErr('Request failed') }
+    finally { setLoading(false) }
+  }
+
+  const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
+    <div style={{ marginBottom: 16 }}>
+      <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: 6 }}>{label}</label>
+      {children}
+    </div>
+  )
+  const inputStyle: React.CSSProperties = {
+    width: '100%', height: 42, padding: '0 13px', borderRadius: 10, boxSizing: 'border-box',
+    background: 'var(--input-bg)', border: '1px solid var(--border)', color: 'var(--text-1)', fontSize: 13.5, outline: 'none',
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'grid', placeItems: 'center',
+      background: 'rgba(6,9,18,0.72)', backdropFilter: 'blur(6px)' }}>
+      <div style={{ borderRadius: 20, padding: 28, width: 420, maxWidth: '90vw',
+        background: 'var(--surface-1)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-elevated)' }}>
+        <h3 style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 700, color: 'var(--text-1)' }}>Invite user</h3>
+        <p style={{ margin: '0 0 22px', fontSize: 13, color: 'var(--text-3)' }}>They'll receive a magic link to join.</p>
+
+        {done ? (
+          <div style={{ textAlign: 'center', padding: '16px 0', color: 'var(--pos)', fontSize: 14, fontWeight: 600 }}>
+            Invitation sent!
+          </div>
+        ) : (
+          <>
+            <Field label="Full name">
+              <input style={inputStyle} placeholder="Jane Smith" value={form.full_name}
+                onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))} />
+            </Field>
+            <Field label="Work email">
+              <input style={inputStyle} type="email" placeholder="jane@refinery.io" value={form.email}
+                onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+            </Field>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: 6 }}>Role</label>
+                <select style={{ ...inputStyle, cursor: 'pointer' }} value={form.role_id}
+                  onChange={e => setForm(f => ({ ...f, role_id: Number(e.target.value) }))}>
+                  <option value={1}>Admin</option>
+                  <option value={2}>Manager</option>
+                  <option value={3}>End User</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: 6 }}>Department</label>
+                <select style={{ ...inputStyle, cursor: 'pointer' }} value={form.department}
+                  onChange={e => setForm(f => ({ ...f, department: e.target.value }))}>
+                  <option value="hr">Human Resources</option>
+                  <option value="operations">Operations</option>
+                </select>
+              </div>
+            </div>
+            {err && <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--neg)', padding: '10px 13px',
+              borderRadius: 9, background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.25)' }}>{err}</p>}
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={onClose} style={{ flex: 1, height: 42, borderRadius: 11, border: '1px solid var(--border)',
+                background: 'transparent', color: 'var(--text-2)', fontSize: 14, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={submit} disabled={loading} style={{ flex: 2, height: 42, borderRadius: 11, border: 'none',
+                background: 'var(--ai-grad)', color: '#fff', fontSize: 14, fontWeight: 600,
+                cursor: loading ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                {loading ? 'Sending…' : 'Send invite'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 /* ---- UsersTable ---- */
 function UsersTable() {
   const [users, setUsers] = useState<User[]>(() => USERS.map(u => ({ ...u })))
   const [q, setQ] = useState("")
+  const [roleFilter, setRoleFilter] = useState<string>('all')
+  const [showInvite, setShowInvite] = useState(false)
 
-  const filtered = users.filter(u =>
-    (u.name + u.email + u.role).toLowerCase().includes(q.toLowerCase())
-  )
+  const filtered = users.filter(u => {
+    const matchQ = (u.name + u.email + u.role).toLowerCase().includes(q.toLowerCase())
+    const matchRole = roleFilter === 'all' || u.role.toLowerCase().replace(' ', '_') === roleFilter
+    return matchQ && matchRole
+  })
 
   const toggle = (email: string) => setUsers(us =>
     us.map(u => u.email === email ? { ...u, status: !u.status } : u)
   )
 
   return (
-    <div style={{ borderRadius: "var(--r-lg)", overflow: "hidden", background: "var(--surface-1)", border: "1px solid var(--border)", boxShadow: "var(--shadow-card)" }}>
+    <>
+      {showInvite && <InviteModal onClose={() => setShowInvite(false)} />}
+      <div style={{ borderRadius: "var(--r-lg)", overflow: "hidden", background: "var(--surface-1)", border: "1px solid var(--border)", boxShadow: "var(--shadow-card)" }}>
       {/* Toolbar */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 20px", borderBottom: "1px solid var(--border)" }}>
         <div style={{
@@ -57,24 +157,23 @@ function UsersTable() {
           borderRadius: 10, background: "var(--input-bg)", border: "1px solid var(--border)"
         }}>
           <I.search size={16} style={{ color: "var(--text-3)" }} />
-          <input
-            value={q}
-            onChange={e => setQ(e.target.value)}
-            placeholder="Search users…"
-            style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: "var(--text-1)", fontSize: 13.5 }}
-          />
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search users…"
+            style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: "var(--text-1)", fontSize: 13.5 }} />
         </div>
-        <button style={{
-          display: "flex", alignItems: "center", gap: 7, height: 38, padding: "0 13px", borderRadius: 10,
+        <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)} style={{
+          height: 38, padding: "0 10px", borderRadius: 10, cursor: 'pointer',
           background: "var(--glass-faint)", border: "1px solid var(--border)", color: "var(--text-2)", fontSize: 13
         }}>
-          <I.filter size={15} /> Role
-        </button>
+          <option value="all">All roles</option>
+          <option value="admin">Admin</option>
+          <option value="manager">Manager</option>
+          <option value="end_user">End User</option>
+        </select>
         <div style={{ flex: 1 }} />
-        <button className="focusable" style={{
+        <button className="focusable" onClick={() => setShowInvite(true)} style={{
           display: "flex", alignItems: "center", gap: 8, height: 38, padding: "0 16px", borderRadius: 10,
           background: "var(--ai-grad)", border: "none", color: "#fff", fontSize: 13.5, fontWeight: 600,
-          boxShadow: "0 6px 18px -8px rgba(124,109,245,0.8)"
+          boxShadow: "0 6px 18px -8px rgba(124,109,245,0.8)", cursor: "pointer"
         }}>
           <I.plus size={16} /> Invite user
         </button>
@@ -121,6 +220,7 @@ function UsersTable() {
         </div>
       ))}
     </div>
+    </>
   )
 }
 
