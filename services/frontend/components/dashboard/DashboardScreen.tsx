@@ -5,10 +5,10 @@
    ============================================================ */
 
 import React from 'react'
-import { IconBtn } from '../ui'
+import { IconBtn, Avatar } from '../ui'
 import { I } from '../icons'
 import { STATS, COVERAGE, ACTIVITY, RECENT_QUERIES, deptName, deptShort, Stat, CoverageItem, ActivityItem, RecentQuery } from '@/lib/data'
-import { Avatar } from '../ui'
+import { useTheme } from '@/lib/theme'
 
 /* ---- StatCard ---- */
 interface StatCardProps {
@@ -153,6 +153,7 @@ function RecentQueries() {
 
 /* ---- DashboardScreen ---- */
 export default function DashboardScreen() {
+  const { theme, toggle } = useTheme()
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minWidth: 0 }}>
       <header style={{
@@ -165,7 +166,16 @@ export default function DashboardScreen() {
         </div>
         <div style={{ flex: 1 }} />
         <span className="badge badge-admin"><I.sparkle size={12} /> Admin view</span>
-        <IconBtn icon={I.search} title="Search" />
+        <button onClick={toggle} title={theme === 'dark' ? 'Light mode' : 'Dark mode'} style={{
+          width: 32, height: 32, borderRadius: 9, border: '1px solid var(--border)', background: 'transparent',
+          color: 'var(--text-3)', cursor: 'pointer', display: 'grid', placeItems: 'center',
+          transition: 'all var(--dur) var(--ease)' }}
+          onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.borderColor = 'var(--border-ai)'; b.style.color = 'var(--text-1)' }}
+          onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.borderColor = 'var(--border)'; b.style.color = 'var(--text-3)' }}>
+          {theme === 'dark'
+            ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+            : <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>}
+        </button>
         <IconBtn icon={I.bell} title="Notifications" />
       </header>
 

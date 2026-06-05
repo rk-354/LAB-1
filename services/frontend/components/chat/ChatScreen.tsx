@@ -7,6 +7,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Avatar, IconBtn, CiteChip, CiteText } from '../ui'
 import { I } from '../icons'
 import { DEPARTMENTS } from '@/lib/data'
+import { useTheme } from '@/lib/theme'
 
 // ── Types ─────────────────────────────────────────────────
 interface Citation { id: number; doc: string; page: string; dept: string }
@@ -192,6 +193,7 @@ const SUGGESTIONS = [
 ]
 
 export default function ChatScreen({ dept, sessionId }: ChatScreenProps) {
+  const { theme, toggle } = useTheme()
   const [thread, setThread] = useState<ChatMessage[]>([])
   const [phase, setPhase] = useState<'idle' | 'thinking' | 'streaming'>('idle')
   const [input, setInput] = useState('')
@@ -305,6 +307,17 @@ export default function ChatScreen({ dept, sessionId }: ChatScreenProps) {
           <div style={{ fontSize: 11.5, color: 'var(--text-3)' }}>Knowledge assistant</div>
         </div>
         <div style={{ flex: 1 }} />
+        {/* Theme toggle near bell */}
+        <button onClick={toggle} title={theme === 'dark' ? 'Light mode' : 'Dark mode'} style={{
+          width: 32, height: 32, borderRadius: 9, border: '1px solid var(--border)', background: 'transparent',
+          color: 'var(--text-3)', cursor: 'pointer', display: 'grid', placeItems: 'center',
+          transition: 'all var(--dur) var(--ease)' }}
+          onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.borderColor = 'var(--border-ai)'; b.style.color = 'var(--text-1)' }}
+          onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.borderColor = 'var(--border)'; b.style.color = 'var(--text-3)' }}>
+          {theme === 'dark'
+            ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+            : <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>}
+        </button>
         <IconBtn icon={I.bell} title="Notifications" />
       </header>
 
@@ -417,11 +430,6 @@ export default function ChatScreen({ dept, sessionId }: ChatScreenProps) {
               style={{ flex: 1, resize: 'none', background: 'transparent', border: 'none', outline: 'none',
                 color: 'var(--text-1)', fontSize: 14.5, lineHeight: 1.5, padding: '9px 0', maxHeight: 140 }} />
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, height: 26, padding: '0 8px',
-                borderRadius: 8, background: 'var(--glass-faint)', border: '1px solid var(--border)',
-                fontSize: 11, color: 'var(--text-3)' }}>
-                <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--pos)' }} /> Auto-route
-              </span>
               <button onClick={() => ask(input)} disabled={!input.trim() || phase !== 'idle'} style={{
                 width: 40, height: 40, borderRadius: 12, border: 'none', display: 'grid', placeItems: 'center',
                 background: input.trim() && phase === 'idle' ? 'var(--ai-grad)' : 'var(--glass-faint)',

@@ -121,3 +121,30 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ data: null, error: 'Invalid request' }, { status: 400 })
   }
 }
+
+// DELETE /api/admin/users?id=xxx — deactivate user (admin only)
+export async function DELETE(req: Request) {
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ data: null, error: 'Unauthorized' }, { status: 401 })
+
+  const { data: profile } = await supabase.from('profiles').select('roles(name)').eq('id', user.id).single()
+  if ((profile?.roles as unknown as { name: string })?.name !== 'admin') {
+    return NextResponse.json({ data: null, error: 'Forbidden' }, { status: 403 })
+  }
+
+  const { searchParams } = new URL(req.url)
+  const id = searchParams.get('id')
+  if (!id) return NextResponse.json({ data: null, error: 'id required' }, { status: 400 })
+  if (id === user.id) return NextResponse.json({ data: null, error: 'Cannot deactivate yourself' }, { status: 400 })
+
+  const admin = createAdminClient()
+  const { error } = await admin.from('profiles').update({ is_active: false }).eq('id', id)
+  if (error) return NextResponse.json({ data: null, error: error.message }, { status: 500 })
+
+  await admin.rpc('log_action', {
+    p_user_id: user.id, p_action: 'deactivate_user',
+    p_resource: 'user', p_resource_id: id, p_metadata: {},
+  })
+  return NextResponse.json({ data: { deactivated: true }, error: null })
+}
