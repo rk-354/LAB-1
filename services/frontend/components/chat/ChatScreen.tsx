@@ -237,7 +237,7 @@ export default function ChatScreen({ dept, sessionId }: ChatScreenProps) {
       const res = await fetch('/api/chat', {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: q, department_slug: dept, session_id: currentSessionId }),
+        body: JSON.stringify({ message: q, department_slug: dept, ...(currentSessionId ? { session_id: currentSessionId } : {}) }),
       })
       const json = await res.json()
 

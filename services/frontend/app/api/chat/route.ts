@@ -10,7 +10,7 @@ import { chat } from '@/lib/llm/router'
 import { logger } from '@/lib/logger'
 
 const ChatSchema = z.object({
-  session_id: z.string().uuid().optional(),
+  session_id: z.string().uuid().nullish(),  // accepts string | null | undefined
   message: z.string().min(1).max(4000),
   department_slug: z.string(),
 })
@@ -153,12 +153,12 @@ export async function POST(req: Request) {
       input_tokens: llmMeta.input_tokens,
       output_tokens: llmMeta.output_tokens,
       user_id: user.id,
-      session_id: sessionId,
+      session_id: sessionId ?? undefined,
     })
 
     logger.info('chat_response', {
       user_id: user.id,
-      session_id: sessionId,
+      session_id: sessionId ?? undefined,
       dept: body.department_slug,
       chunks_used: chunks.length,
       has_pii: piiResult.hasPII,
