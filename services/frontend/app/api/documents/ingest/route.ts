@@ -1,11 +1,12 @@
 // POST /api/documents/ingest
 // Triggered after a file is uploaded to Supabase Storage.
-// Runs: extract text → chunk → embed → store in pgvector
+// Runs: extract text → chunk → embed → store pgvector + Elasticsearch
 
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
+import { indexChunk, ensureIndex } from '@/lib/search/elasticsearch'
 import { extractText } from '@/lib/rag/extractor'
 import { chunkText } from '@/lib/rag/chunker'
 import { embedBatch } from '@/lib/llm/embeddings'
@@ -74,12 +75,21 @@ export async function POST(req: Request) {
 
     const doc = version.documents as { title: string; department_slug: string }
 
-    // Store chunks + embeddings in Supabase
+    // Ensure ES index exists (no-op if already there)
+    await ensureIndex()
+
+    // Store chunks + embeddings in Supabase + Elasticsearch
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i]
       const embedding = allEmbeddings[i]
+      const chunkMeta = {
+        filename: version.file_name,
+        page_number: chunk.pageHint,
+        title: doc.title,
+        chunk_index: chunk.index,
+      }
 
-      // Insert chunk metadata
+      // Insert chunk metadata into PostgreSQL
       const { data: chunkRecord } = await admin
         .from('document_chunks')
         .insert({
@@ -94,20 +104,24 @@ export async function POST(req: Request) {
         .single()
 
       if (chunkRecord) {
-        // Insert embedding
+        // Insert embedding into pgvector
         await admin.from('document_embeddings').insert({
           chunk_id: chunkRecord.id,
           document_id: body.document_id,
           department_slug: doc.department_slug,
           embedding: embedding,
           chunk_text: chunk.text,
-          metadata: {
-            filename: version.file_name,
-            page_number: chunk.pageHint,
-            title: doc.title,
-            chunk_index: chunk.index,
-          },
+          metadata: chunkMeta,
         })
+
+        // Index into Elasticsearch for BM25 keyword search
+        await indexChunk(
+          chunkRecord.id,
+          body.document_id,
+          chunk.text,
+          doc.department_slug,
+          chunkMeta
+        )
       }
     }
 

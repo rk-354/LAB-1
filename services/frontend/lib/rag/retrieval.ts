@@ -1,8 +1,9 @@
-// RAG retrieval — semantic search via Supabase pgvector
-// Returns top-k chunks with citation metadata
+// RAG retrieval — hybrid search: pgvector semantic + Elasticsearch BM25
+// Uses Reciprocal Rank Fusion (RRF) to merge both result sets
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { embed } from '@/lib/llm/embeddings'
+import { keywordSearch } from '@/lib/search/elasticsearch'
 
 export interface RetrievedChunk {
   chunkId: string
@@ -21,46 +22,76 @@ export async function retrieveChunks(
   query: string,
   departmentSlug: string,
   topK = 5,
-  threshold = 0.4
+  threshold = 0.3
 ): Promise<RetrievedChunk[]> {
   const queryEmbedding = await embed(query)
   const admin = createAdminClient()
 
-  const { data, error } = await admin.rpc('match_documents', {
-    query_embedding: queryEmbedding,
-    dept_slug: departmentSlug,
-    match_count: topK,
-    match_threshold: threshold,
+  // Run semantic + keyword search in parallel
+  const [semanticRaw, keywordRaw] = await Promise.all([
+    admin.rpc('match_documents', {
+      query_embedding: queryEmbedding,
+      dept_slug: departmentSlug,
+      match_count: topK * 2,
+      match_threshold: threshold,
+    }).then(r => r.data ?? []),
+    keywordSearch(query, departmentSlug, topK * 2),
+  ])
+
+  if (semanticRaw.length === 0 && keywordRaw.length === 0) return []
+
+  // Reciprocal Rank Fusion — K=60 is standard
+  const K = 60
+  const rrfScores = new Map<string, number>()
+  const chunkTexts = new Map<string, string>()
+  const chunkDocIds = new Map<string, string>()
+  const chunkMeta = new Map<string, Record<string, unknown>>()
+
+  semanticRaw.forEach((r: {
+    chunk_id: string; document_id: string; chunk_text: string;
+    similarity: number; metadata: Record<string, unknown>
+  }, rank: number) => {
+    rrfScores.set(r.chunk_id, (rrfScores.get(r.chunk_id) ?? 0) + 1 / (K + rank + 1))
+    chunkTexts.set(r.chunk_id, r.chunk_text)
+    chunkDocIds.set(r.chunk_id, r.document_id)
+    chunkMeta.set(r.chunk_id, r.metadata ?? {})
   })
 
-  if (error) throw new Error(`Retrieval error: ${error.message}`)
-  if (!data || data.length === 0) return []
+  keywordRaw.forEach((r, rank) => {
+    rrfScores.set(r.chunkId, (rrfScores.get(r.chunkId) ?? 0) + 1 / (K + rank + 1))
+    if (!chunkTexts.has(r.chunkId)) {
+      chunkTexts.set(r.chunkId, r.chunkText)
+      chunkDocIds.set(r.chunkId, r.documentId)
+      chunkMeta.set(r.chunkId, r.metadata as Record<string, unknown>)
+    }
+  })
+
+  // Sort by RRF score descending, take topK
+  const ranked = Array.from(rrfScores.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, topK)
 
   // Fetch document titles for citations
-  const docIds = Array.from(new Set(data.map((r: { document_id: string }) => r.document_id)))
+  const docIds = Array.from(new Set(ranked.map(([id]) => chunkDocIds.get(id)).filter((d): d is string => !!d)))
   const { data: docs } = await admin
     .from('documents')
     .select('id, title, department_slug')
     .in('id', docIds)
 
-  const docMap = new Map(docs?.map(d => [d.id, d]) ?? [])
+  const docMap = new Map((docs ?? []).map(d => [d.id, d]))
 
-  return data.map((r: {
-    chunk_id: string
-    document_id: string
-    chunk_text: string
-    similarity: number
-    metadata: Record<string, unknown>
-  }) => {
-    const doc = docMap.get(r.document_id)
+  return ranked.map(([chunkId, score]) => {
+    const docId = chunkDocIds.get(chunkId) ?? ''
+    const doc = docMap.get(docId)
+    const meta = chunkMeta.get(chunkId) ?? {}
     return {
-      chunkId: r.chunk_id,
-      documentId: r.document_id,
-      chunkText: r.chunk_text,
-      similarity: r.similarity,
+      chunkId,
+      documentId: docId,
+      chunkText: chunkTexts.get(chunkId) ?? '',
+      similarity: score,
       metadata: {
-        filename: (r.metadata?.filename as string) || doc?.title || 'Unknown',
-        page: r.metadata?.page_number as number | undefined,
+        filename: (meta.filename as string) || doc?.title || 'Unknown',
+        page: meta.page_number as number | undefined,
         department: doc?.department_slug,
         title: doc?.title,
       },
