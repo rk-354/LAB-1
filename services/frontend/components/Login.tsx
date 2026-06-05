@@ -7,6 +7,7 @@
 import React, { useState } from 'react'
 import { Logo } from './ui'
 import { I } from './icons'
+import { createClient } from '@/lib/supabase/client'
 
 function Aurora() {
   return (
@@ -53,17 +54,21 @@ export default function Login({ onLogin }: LoginProps) {
     setLoading(true)
     setError(null)
     try {
-      const body = usePassword ? { email, password } : { email }
-      const res = await fetch('/api/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      const json = await res.json()
-      if (json.error) { setError(json.error); return }
       if (usePassword) {
-        onLogin() // password login → go straight to app
+        // Password login — use browser client so session cookie is set in browser
+        const supabase = createClient()
+        const { error } = await supabase.auth.signInWithPassword({ email, password })
+        if (error) { setError(error.message); return }
+        onLogin()
       } else {
+        // Magic link — goes through API route
+        const res = await fetch('/api/auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        })
+        const json = await res.json()
+        if (json.error) { setError(json.error); return }
         setSent(true)
       }
     } catch {
