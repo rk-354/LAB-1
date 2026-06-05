@@ -1,0 +1,32 @@
+name: CD — Deploy to Production
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require staging approval
+        run: echo "Manual approval gate — configure in GitHub Environments"
+
+      - name: Build production images
+        run: echo "docker build --target production ..."
+
+      - name: Deploy to production
+        run: echo "Deploy via docker-compose.prod.yml"
+
+      - name: Run smoke tests
+        run: echo "Smoke test production endpoints"
+
+      - name: Tag release
+        run: |
+          VERSION=$(date +%Y%m%d-%H%M)
+          git tag "release-$VERSION"
+          echo "Tagged release-$VERSION"

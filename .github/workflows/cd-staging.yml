@@ -1,0 +1,36 @@
+name: CD — Deploy to Staging
+
+on:
+  push:
+    branches: [staging]
+
+jobs:
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    environment: staging
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build & push images
+        run: |
+          echo "Build and push to container registry (configure registry secrets)"
+          # docker build + push steps go here once registry is configured
+
+      - name: Deploy via docker-compose (staging)
+        run: |
+          echo "Deploy to staging server"
+          # SSH + docker-compose pull + up steps
+
+      - name: Run integration tests
+        run: |
+          echo "Run smoke tests against staging"
+          # pytest tests/integration --env=staging
+
+      - name: Notify on failure
+        if: failure()
+        run: echo "Notify team of staging deployment failure"
