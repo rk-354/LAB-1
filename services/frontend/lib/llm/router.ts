@@ -122,34 +122,34 @@ async function callAnthropic(messages: LLMMessage[], systemPrompt?: string): Pro
   }
 }
 
-// ── Main router: Ollama → NVIDIA → Anthropic ───────────────
+// ── Main router: NVIDIA → Ollama → Anthropic ───────────────
 export async function chat(
   messages: LLMMessage[],
   systemPrompt?: string
 ): Promise<LLMResponse> {
 
-  // 1. Try Ollama (local, free, always first)
-  try {
-    const result = await callOllama(messages, systemPrompt)
-    logger.info('llm: ollama responded', { tokens_out: result.output_tokens })
-    return result
-  } catch (e) {
-    logger.warn('LLM router: Ollama failed, trying NVIDIA', {
-      error: e instanceof Error ? e.message : String(e),
-    })
-  }
-
-  // 2. Try NVIDIA NIM (cloud, free tier, fast)
+  // 1. Try NVIDIA NIM (primary — cloud, free tier, 550B reasoning model)
   if (NVIDIA_KEY) {
     try {
       const result = await callNvidia(messages, systemPrompt)
       logger.info('llm: NVIDIA NIM responded', { model: NVIDIA_MODEL, tokens_out: result.output_tokens })
       return result
     } catch (e) {
-      logger.warn('LLM router: NVIDIA failed', {
+      logger.warn('LLM router: NVIDIA failed, trying Ollama', {
         error: e instanceof Error ? e.message : String(e),
       })
     }
+  }
+
+  // 2. Try Ollama (local fallback)
+  try {
+    const result = await callOllama(messages, systemPrompt)
+    logger.info('llm: Ollama responded', { tokens_out: result.output_tokens })
+    return result
+  } catch (e) {
+    logger.warn('LLM router: Ollama failed', {
+      error: e instanceof Error ? e.message : String(e),
+    })
   }
 
   // 3. Try Anthropic (if key configured)
@@ -167,9 +167,9 @@ export async function chat(
 
   // All failed
   return {
-    content: 'No LLM available. Make sure Ollama is running: ollama serve',
-    model: OLLAMA_MODEL,
-    provider: 'ollama',
+    content: 'No LLM available. Check NVIDIA API key or run: ollama serve',
+    model: NVIDIA_MODEL,
+    provider: 'nvidia',
     input_tokens: 0,
     output_tokens: 0,
     cached: false,
