@@ -1,3 +1,5 @@
+export const runtime = 'nodejs'
+
 // POST /api/documents/upload
 // Accepts multipart/form-data, uploads to Supabase Storage,
 // creates document + version records, then triggers ingestion.

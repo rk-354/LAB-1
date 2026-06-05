@@ -1,4 +1,4 @@
-name: CD — Deploy to Staging
+name: CD — Deploy to Cloudflare Pages (Staging)
 
 on:
   push:
@@ -6,31 +6,36 @@ on:
 
 jobs:
   deploy-staging:
-    name: Deploy to Staging
+    name: Build + Deploy to Cloudflare Pages (staging branch)
     runs-on: ubuntu-latest
     environment: staging
+    defaults:
+      run:
+        working-directory: services/frontend
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: services/frontend/package-lock.json
 
-      - name: Build & push images
-        run: |
-          echo "Build and push to container registry (configure registry secrets)"
-          # docker build + push steps go here once registry is configured
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
 
-      - name: Deploy via docker-compose (staging)
-        run: |
-          echo "Deploy to staging server"
-          # SSH + docker-compose pull + up steps
+      - name: Build for Cloudflare Pages
+        run: npx @cloudflare/next-on-pages
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_APP_URL: ${{ secrets.STAGING_APP_URL }}
 
-      - name: Run integration tests
-        run: |
-          echo "Run smoke tests against staging"
-          # pytest tests/integration --env=staging
-
-      - name: Notify on failure
-        if: failure()
-        run: echo "Notify team of staging deployment failure"
+      - name: Deploy to Cloudflare Pages (staging)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy .vercel/output/static --project-name=refineriq --branch=staging
+          workingDirectory: services/frontend

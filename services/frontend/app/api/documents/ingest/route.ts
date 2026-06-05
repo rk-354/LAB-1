@@ -1,3 +1,5 @@
+export const runtime = 'nodejs'
+
 // POST /api/documents/ingest
 // Triggered after a file is uploaded to Supabase Storage.
 // Runs: extract text → chunk → embed → store pgvector + Elasticsearch

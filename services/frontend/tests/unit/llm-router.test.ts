@@ -1,11 +1,16 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from 'vitest'
 
 // Mock fetch globally
 const mockFetch = vi.fn()
 vi.stubGlobal('fetch', mockFetch)
 
-// Import after stubbing
-const { chat } = await import('@/lib/llm/router')
+// Import after stubbing — use dynamic import in beforeAll
+let chat: (messages: import('@/lib/llm/router').LLMMessage[], systemPrompt?: string) => Promise<import('@/lib/llm/router').LLMResponse>
+
+beforeAll(async () => {
+  const mod = await import('@/lib/llm/router')
+  chat = mod.chat
+})
 
 describe('LLM Router', () => {
   beforeEach(() => {
