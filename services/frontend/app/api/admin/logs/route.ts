@@ -1,3 +1,4 @@
+﻿export const dynamic = 'force-dynamic'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
@@ -10,7 +11,7 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100)
 
-  // Use service-role client to bypass RLS — access is already gated by auth above
+  // Use service-role client to bypass RLS â€” access is already gated by auth above
   const admin = createAdminClient()
   const { data, error } = await admin
     .from('audit_logs')
@@ -21,3 +22,4 @@ export async function GET(req: Request) {
   if (error) return NextResponse.json({ data: null, error: error.message }, { status: 500 })
   return NextResponse.json({ data, error: null })
 }
+

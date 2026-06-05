@@ -1,3 +1,4 @@
+﻿export const dynamic = 'force-dynamic'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
@@ -29,3 +30,4 @@ export async function POST(req: Request) {
     return NextResponse.json({ data: null, error: 'Invalid request' }, { status: 400 })
   }
 }
+

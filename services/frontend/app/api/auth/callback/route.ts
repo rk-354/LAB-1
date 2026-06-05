@@ -1,7 +1,8 @@
+﻿export const dynamic = 'force-dynamic'
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 
-// GET /api/auth/callback — Supabase redirects here after magic link click
+// GET /api/auth/callback â€” Supabase redirects here after magic link click
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
@@ -14,3 +15,4 @@ export async function GET(request: Request) {
 
   return NextResponse.redirect(`${origin}/login?error=auth_failed`)
 }
+

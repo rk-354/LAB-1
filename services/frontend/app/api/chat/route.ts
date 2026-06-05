@@ -1,3 +1,4 @@
+﻿export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
 import { createClient } from '@/lib/supabase/server'
@@ -35,7 +36,7 @@ export async function GET(req: Request) {
   return NextResponse.json({ data, error: null })
 }
 
-// POST /api/chat — real RAG pipeline
+// POST /api/chat â€” real RAG pipeline
 export async function POST(req: Request) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -181,3 +182,4 @@ export async function POST(req: Request) {
     return NextResponse.json({ data: null, error: msg }, { status: 500 })
   }
 }
+

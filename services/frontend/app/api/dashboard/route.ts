@@ -1,8 +1,9 @@
+﻿export const dynamic = 'force-dynamic'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 
-// GET /api/dashboard — stats for admin and manager dashboards
+// GET /api/dashboard â€” stats for admin and manager dashboards
 export async function GET() {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -28,7 +29,7 @@ export async function GET() {
   if (!isAdmin && dept) docQuery.eq('department_slug', dept)
   const { count: totalDocs } = await docQuery
 
-  // Active users (logged in last 7 days) — approximated via profiles
+  // Active users (logged in last 7 days) â€” approximated via profiles
   const { count: activeUsers } = await admin
     .from('profiles')
     .select('id', { count: 'exact', head: true })
@@ -96,3 +97,4 @@ export async function GET() {
     error: null,
   })
 }
+

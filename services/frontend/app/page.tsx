@@ -17,6 +17,7 @@ export default function App() {
   const supabase = createClient()
 
   useEffect(() => {
+    if (process.env.NEXT_PUBLIC_DEMO === '1') { setReady(true); return }
     // Verify session exists (middleware handles redirect if not, this is a safety check)
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) {

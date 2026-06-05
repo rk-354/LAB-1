@@ -1,3 +1,4 @@
+﻿export const dynamic = 'force-dynamic'
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
@@ -5,7 +6,7 @@ import { z } from 'zod'
 const MagicLinkSchema = z.object({ email: z.string().email() })
 const PasswordSchema = z.object({ email: z.string().email(), password: z.string().min(6) })
 
-// POST /api/auth — magic link (default) or password login (if password provided)
+// POST /api/auth â€” magic link (default) or password login (if password provided)
 export async function POST(req: Request) {
   try {
     const body = await req.json()
@@ -33,9 +34,10 @@ export async function POST(req: Request) {
   }
 }
 
-// DELETE /api/auth — sign out
+// DELETE /api/auth â€” sign out
 export async function DELETE() {
   const supabase = createClient()
   await supabase.auth.signOut()
   return NextResponse.json({ data: { message: 'Signed out' }, error: null })
 }
+

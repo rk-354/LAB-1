@@ -1,9 +1,10 @@
+﻿export const dynamic = 'force-dynamic'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 
-// GET /api/documents?dept=hr — list documents (optionally filtered by department)
+// GET /api/documents?dept=hr â€” list documents (optionally filtered by department)
 export async function GET(req: Request) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -12,7 +13,7 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const dept = searchParams.get('dept')
 
-  // Use service-role client to bypass RLS — access is gated by auth above.
+  // Use service-role client to bypass RLS â€” access is gated by auth above.
   // The optional ?dept= param narrows results; omitting it returns all departments.
   const admin = createAdminClient()
   let query = admin
@@ -47,7 +48,7 @@ const UploadSchema = z.object({
   mime_type: z.string(),
 })
 
-// POST /api/documents — create document record after file upload to Storage
+// POST /api/documents â€” create document record after file upload to Storage
 export async function POST(req: Request) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -96,7 +97,7 @@ export async function POST(req: Request) {
   }
 }
 
-// DELETE /api/documents?id=xxx — soft delete (managers own dept, admins all)
+// DELETE /api/documents?id=xxx â€” soft delete (managers own dept, admins all)
 export async function DELETE(req: Request) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -116,3 +117,4 @@ export async function DELETE(req: Request) {
   })
   return NextResponse.json({ data: { deleted: true }, error: null })
 }
+

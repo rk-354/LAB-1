@@ -1,7 +1,8 @@
+﻿export const dynamic = 'force-dynamic'
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 
-// GET /api/chat/sessions — list user's chat sessions for sidebar
+// GET /api/chat/sessions â€” list user's chat sessions for sidebar
 export async function GET() {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -18,3 +19,4 @@ export async function GET() {
   if (error) return NextResponse.json({ data: null, error: error.message }, { status: 500 })
   return NextResponse.json({ data, error: null })
 }
+

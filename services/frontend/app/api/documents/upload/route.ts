@@ -1,3 +1,4 @@
+﻿export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
 // POST /api/documents/upload
@@ -106,7 +107,7 @@ export async function POST(req: Request) {
     p_metadata: { file_name: file.name, file_size: file.size, mime_type: file.type },
   })
 
-  // Run ingestion inline — no HTTP self-call, no auth issues, immediate result
+  // Run ingestion inline â€” no HTTP self-call, no auth issues, immediate result
   let indexingStatus = 'error'
   let chunksIndexed = 0
   try {
@@ -116,7 +117,7 @@ export async function POST(req: Request) {
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Ingestion failed'
     logger.error('upload: ingestion failed', { document_id: doc.id, error: msg })
-    // Don't fail the whole upload — file is in storage, just not indexed yet
+    // Don't fail the whole upload â€” file is in storage, just not indexed yet
     indexingStatus = 'error'
   }
 
@@ -131,3 +132,4 @@ export async function POST(req: Request) {
     error: null,
   }, { status: 201 })
 }
+

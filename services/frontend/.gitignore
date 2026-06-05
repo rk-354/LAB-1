@@ -1,0 +1,4 @@
+﻿
+# Vercel/CF build output
+.vercel/
+out/

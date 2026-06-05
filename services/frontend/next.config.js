@@ -2,6 +2,8 @@ const { withSentryConfig } = require('@sentry/nextjs')
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: process.env.CF_PAGES ? 'export' : undefined,
+  images: process.env.CF_PAGES ? { unoptimized: true } : undefined,
   experimental: {
     serverComponentsExternalPackages: ['pdf-parse', 'mammoth', 'xlsx'],
   },

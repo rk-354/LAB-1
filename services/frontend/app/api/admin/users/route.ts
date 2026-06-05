@@ -1,9 +1,10 @@
+﻿export const dynamic = 'force-dynamic'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 
-// GET /api/admin/users — list all users (admin only)
+// GET /api/admin/users â€” list all users (admin only)
 export async function GET() {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -36,7 +37,7 @@ const InviteSchema = z.object({
   department: z.string(),
 })
 
-// POST /api/admin/users — invite a new user (admin only)
+// POST /api/admin/users â€” invite a new user (admin only)
 export async function POST(req: Request) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -93,7 +94,7 @@ const UpdateSchema = z.object({
   department: z.string().optional(),
 })
 
-// PATCH /api/admin/users — update role or status
+// PATCH /api/admin/users â€” update role or status
 export async function PATCH(req: Request) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -122,7 +123,7 @@ export async function PATCH(req: Request) {
   }
 }
 
-// DELETE /api/admin/users?id=xxx — deactivate user (admin only)
+// DELETE /api/admin/users?id=xxx â€” deactivate user (admin only)
 export async function DELETE(req: Request) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -148,3 +149,4 @@ export async function DELETE(req: Request) {
   })
   return NextResponse.json({ data: { deactivated: true }, error: null })
 }
+

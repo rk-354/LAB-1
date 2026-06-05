@@ -1,6 +1,7 @@
+﻿export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
-// POST /api/documents/ingest — manual trigger endpoint
+// POST /api/documents/ingest â€” manual trigger endpoint
 // Uses shared runIngestion() from lib/rag/ingest.ts
 
 import { createClient } from '@/lib/supabase/server'
@@ -27,3 +28,4 @@ export async function POST(req: Request) {
     return NextResponse.json({ data: null, error: msg }, { status: 500 })
   }
 }
+
