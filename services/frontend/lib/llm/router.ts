@@ -1,5 +1,5 @@
-// LLM Router — Ollama (primary) → Anthropic (fallback)
-// All LLM calls go through this file. Never call providers directly.
+// LLM Router — Ollama only (local)
+// Anthropic fallback only used if ANTHROPIC_API_KEY is set
 
 import { logger } from '@/lib/logger'
 
@@ -20,17 +20,6 @@ export interface LLMResponse {
   cached: boolean
 }
 
-// Check if Ollama is reachable — generous timeout since local startup can be slow
-async function isOllamaAvailable(): Promise<boolean> {
-  try {
-    const res = await fetch(`${OLLAMA_BASE}/api/tags`, { signal: AbortSignal.timeout(8000) })
-    return res.ok
-  } catch {
-    return false
-  }
-}
-
-// Call Ollama chat
 async function callOllama(messages: LLMMessage[], systemPrompt?: string): Promise<LLMResponse> {
   const payload = {
     model: OLLAMA_MODEL,
@@ -45,7 +34,7 @@ async function callOllama(messages: LLMMessage[], systemPrompt?: string): Promis
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(60000),
+    signal: AbortSignal.timeout(120000), // 2 min — generous for local model
   })
 
   if (!res.ok) throw new Error(`Ollama error: ${res.status}`)
@@ -61,7 +50,6 @@ async function callOllama(messages: LLMMessage[], systemPrompt?: string): Promis
   }
 }
 
-// Call Anthropic Claude
 async function callAnthropic(messages: LLMMessage[], systemPrompt?: string): Promise<LLMResponse> {
   const Anthropic = (await import('@anthropic-ai/sdk')).default
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -84,20 +72,36 @@ async function callAnthropic(messages: LLMMessage[], systemPrompt?: string): Pro
   }
 }
 
-// Main router — try Ollama first, fall back to Anthropic
+// Main router — Ollama primary, Anthropic only if key is set
 export async function chat(
   messages: LLMMessage[],
   systemPrompt?: string
 ): Promise<LLMResponse> {
-  const ollamaOk = await isOllamaAvailable()
-  if (ollamaOk) {
-    try {
-      return await callOllama(messages, systemPrompt)
-    } catch (e) {
-      // Structured log — in production, replace with your logger
-      const msg = e instanceof Error ? e.message : String(e)
-      logger.warn('LLM router: Ollama unavailable, falling back to Anthropic', { error: msg })
+  // Try Ollama first (always — it's local)
+  try {
+    return await callOllama(messages, systemPrompt)
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    logger.warn('LLM router: Ollama failed', { error: msg })
+
+    // Only fall back to Anthropic if key is configured
+    if (process.env.ANTHROPIC_API_KEY) {
+      try {
+        logger.info('LLM router: falling back to Anthropic')
+        return await callAnthropic(messages, systemPrompt)
+      } catch (ae) {
+        logger.warn('LLM router: Anthropic also failed', { error: ae instanceof Error ? ae.message : String(ae) })
+      }
+    }
+
+    // Both failed — return a clear error message
+    return {
+      content: 'Ollama is not responding. Make sure Ollama is running with: ollama serve',
+      model: OLLAMA_MODEL,
+      provider: 'ollama',
+      input_tokens: 0,
+      output_tokens: 0,
+      cached: false,
     }
   }
-  return callAnthropic(messages, systemPrompt)
 }
