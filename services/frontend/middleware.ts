@@ -23,8 +23,12 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
+  const path = request.nextUrl.pathname
+  // Public paths — accessible without a session
+  const isPublic = path.startsWith('/login') || path.startsWith('/auth') || path === '/api/auth'
+
   // Redirect unauthenticated users to login
-  if (!user && !request.nextUrl.pathname.startsWith('/login') && !request.nextUrl.pathname.startsWith('/auth')) {
+  if (!user && !isPublic) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
