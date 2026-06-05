@@ -20,10 +20,10 @@ export interface LLMResponse {
   cached: boolean
 }
 
-// Check if Ollama is reachable
+// Check if Ollama is reachable — generous timeout since local startup can be slow
 async function isOllamaAvailable(): Promise<boolean> {
   try {
-    const res = await fetch(`${OLLAMA_BASE}/api/tags`, { signal: AbortSignal.timeout(2000) })
+    const res = await fetch(`${OLLAMA_BASE}/api/tags`, { signal: AbortSignal.timeout(8000) })
     return res.ok
   } catch {
     return false
