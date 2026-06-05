@@ -1,234 +1,179 @@
-# System Architecture Design
+# System Architecture
 # RefinerIQ — Refinery Intelligence Platform
 
-**Version**: 0.1 (Draft)
-**Date**: 2026-06-04
+**Version**: 2.0 (Current)
+**Date**: 2026-06-05
 
 ---
 
 ## 1. Architecture Principles
 
-1. **Free-tier first** — every component has a no-cost operational mode
-2. **Modular services** — each service independently deployable via Docker
-3. **LLM-agnostic** — swap models via config, not code changes
-4. **Security by default** — PII scrubbing, RBAC, audit logs everywhere
-5. **Observable** — structured logs, metrics, distributed tracing
-6. **RAG-first** — AI responses grounded in documents, always cited
+1. **Single repo, single deployment** — Next.js handles both frontend and API
+2. **Supabase-first** — auth, database, vectors, storage all in one managed service
+3. **Local LLM primary** — Ollama runs on-device, Anthropic is the fallback
+4. **RAG-grounded responses** — AI never answers from general knowledge alone
+5. **Security by default** — PII masking, RLS on every table, no secrets in code
+6. **Free-tier viable** — entire stack runs without a paid account
 
 ---
 
-## 2. System Components
+## 2. System Overview
 
-### 2.1 Frontend (Next.js 14)
-- **Path**: `services/frontend/`
-- Chat interface with streaming Server-Sent Events (SSE)
-- Document upload and version history
-- Admin dashboard (usage, logs, token metrics)
-- Tailwind CSS + shadcn/ui components
-- Auth: JWT stored in httpOnly cookies
-
-### 2.2 API Gateway (FastAPI)
-- **Path**: `services/api/`
-- Single entry point for all client requests
-- Responsibilities: JWT validation, RBAC enforcement, rate limiting, PII pre-scan
-- Routes requests to the appropriate agent or service
-- Returns `{ data, error, meta }` envelope on every response
-- WebSocket endpoint for streaming chat
-
-### 2.3 Agent Orchestrator (LangGraph)
-- **Path**: `services/agents/`
-- Stateful graph-based multi-agent system
-- Nodes: OrchestratorAgent → [OpsAgent | HRAgent | ComplianceAgent | DocAgent | AnalyticsAgent]
-- Each agent has: system prompt, tool set, memory, token budget
-- Agent handoffs preserve conversation state
-- All agent calls logged with: input tokens, output tokens, model used, latency
-
-### 2.4 LLM Router
-- **Path**: `services/agents/llm_router.py`
-- Priority order: `Ollama → Groq → OpenAI → Anthropic`
-- Selection criteria: task type, model size needed, current latency, token budget
-- Response caching layer (Redis): identical prompts within TTL return cached response
-- Tracks token usage per user/session
-
-### 2.5 Document Ingestion Pipeline
-- **Path**: `services/ingestion/`
-- Accepts: PDF, DOCX, XLSX, CSV, TXT, PNG, JPG
-- Pipeline: Upload → OCR (if needed) → Text extraction → Chunking → Embedding → Index
-- Chunking strategy: recursive character splitter, 512 tokens, 50 overlap
-- Embeddings: `nomic-embed-text` via Ollama (free, local)
-- Stores: raw file in MinIO, chunks+embeddings in ChromaDB, metadata in PostgreSQL
-
-### 2.6 OCR Service
-- **Path**: `services/ocr/`
-- Tesseract 5 for standard documents
-- PaddleOCR for complex layouts / non-English
-- Returns: extracted text + bounding box metadata
-
-### 2.7 Search Service (Elasticsearch)
-- BM25 full-text index across all document chunks
-- Facets: department, document type, date range, author, role
-- Used for keyword search; vector search via ChromaDB
-- Hybrid retrieval: RRF (Reciprocal Rank Fusion) merges both result sets
-
----
-
-## 3. Data Flow
-
-### 3.1 Document Upload Flow
 ```
-User → Upload API → Auth/RBAC check
-  → Store raw file (MinIO)
-  → Extract text (OCR if needed)
-  → Chunk text (recursive splitter)
-  → Generate embeddings (Ollama nomic-embed-text)
-  → Store chunks (ChromaDB)
-  → Index full text (Elasticsearch)
-  → Store metadata (PostgreSQL: doc_id, version, uploader, dept, timestamp)
-  → Return: { doc_id, version, chunk_count, status }
-```
-
-### 3.2 Chat Query Flow
-```
-User → Chat API → Auth/RBAC → PII scan (Presidio)
-  → Orchestrator Agent (LangGraph)
-    → Classify intent → Route to specialist agent
-    → Hybrid retrieval (ChromaDB + Elasticsearch)
-    → Re-rank chunks (cross-encoder)
-    → Build prompt with context + citations
-    → LLM Router → select model → check Redis cache
-      → (cache hit) return cached response
-      → (cache miss) call LLM → cache response
-    → Format response with citations
-    → Log: user, query, docs retrieved, model, tokens, latency
-  → Stream response to client via SSE
-  → Sentiment analysis on user feedback (async)
-```
-
-### 3.3 Authentication Flow
-```
-User → POST /auth/login → Validate credentials (PostgreSQL)
-  → Generate JWT (access: 60min, refresh: 7days)
-  → Return tokens in httpOnly cookies
-  → All subsequent requests: validate JWT → extract role → enforce RBAC
+┌─────────────────────────────────────────────────────┐
+│              Next.js 14 (App Router)                │
+│         Frontend + API Routes (one repo)            │
+│  ┌─────────────┐  ┌────────────────────────────┐   │
+│  │  React UI   │  │     /app/api/* routes      │   │
+│  │  (client)   │  │  auth · chat · documents   │   │
+│  │             │  │  dashboard · admin         │   │
+│  └─────────────┘  └────────────┬───────────────┘   │
+└───────────────────────────────┼─────────────────────┘
+                                 │
+              ┌──────────────────┼──────────────────┐
+              │                  │                  │
+   ┌──────────▼──────┐  ┌───────▼──────┐  ┌───────▼──────┐
+   │    Supabase     │  │    Ollama    │  │  Anthropic   │
+   │  PostgreSQL     │  │ llama3.2:3b  │  │   Claude     │
+   │  pgvector       │  │nomic-embed   │  │  (fallback)  │
+   │  Auth           │  │  (local)     │  │   (cloud)    │
+   │  Storage        │  └──────────────┘  └──────────────┘
+   └─────────────────┘
+              │
+   ┌──────────▼──────────┐
+   │    Elasticsearch    │
+   │  (Docker, local)    │
+   │  keyword search     │
+   └─────────────────────┘
 ```
 
 ---
 
-## 4. Multi-Agent Architecture
+## 3. Components
 
-```
-┌──────────────────────────────────────────────┐
-│            OrchestratorAgent                 │
-│  - Classifies intent                         │
-│  - Routes to specialist                      │
-│  - Aggregates multi-agent responses          │
-│  - Enforces token budget                     │
-└──┬────────┬──────────┬───────────┬───────────┘
-   │        │          │           │
-┌──▼──┐  ┌──▼──┐  ┌────▼───┐  ┌───▼────┐
-│ Ops │  │ HR  │  │Complnc │  │DocGen  │
-│Agent│  │Agent│  │ Agent  │  │ Agent  │
-└──┬──┘  └──┬──┘  └────┬───┘  └───┬────┘
-   │        │          │           │
-   └────────┴──────────┴───────────┘
-                    │
-            ┌───────▼───────┐
-            │  LLM Router   │
-            │ Ollama/Groq   │
-            │ OpenAI/Anthro │
-            └───────────────┘
-```
+### 3.1 Frontend — `services/frontend/`
+- **Framework**: Next.js 14 App Router, TypeScript strict
+- **Auth guard**: `middleware.ts` — checks Supabase session, redirects to `/login` if missing
+- **Design**: Dark navy theme, Inter font, glass morphism, AI shimmer effects
 
-### Agent Responsibilities
-| Agent | Domain | Tools |
+### 3.2 API Layer — `services/frontend/app/api/`
+All backend logic lives in Next.js API routes. No separate backend service.
+
+| Route | Method | Purpose |
 |---|---|---|
-| OrchestratorAgent | Routing, aggregation | intent_classifier, agent_handoff |
-| OpsAgent | Equipment, maintenance, incidents | rag_search, doc_retriever |
-| HRAgent | Policies, onboarding, org chart | rag_search, employee_db |
-| ComplianceAgent | Regulatory, audits | rag_search, citation_formatter |
-| DocAgent | General document Q&A | rag_search, hybrid_search |
-| AnalyticsAgent | Summaries, trends, sentiment | sql_query, aggregator |
+| `/api/auth` | POST / DELETE | Send magic link / sign out |
+| `/api/auth/callback` | GET | Supabase OAuth redirect handler |
+| `/api/chat` | GET / POST | Message history / RAG chat |
+| `/api/chat/sessions` | GET | Sidebar session list |
+| `/api/documents` | GET / POST | List / create document record |
+| `/api/documents/ingest` | POST | Run ingestion pipeline on uploaded file |
+| `/api/dashboard` | GET | Stats for admin / manager |
+| `/api/admin/users` | GET / POST / PATCH | User management (admin only) |
+
+All routes return `{ data, error }` envelope and check Supabase session first.
+
+### 3.3 Supabase
+Single managed service providing:
+- **PostgreSQL**: Structured data (users, documents, sessions, audit logs)
+- **pgvector**: 768-dim embeddings with HNSW index for semantic search
+- **Auth**: Magic link email auth via Resend
+- **Storage**: Raw uploaded files in `refinery-docs` bucket
+
+### 3.4 LLM Layer — `services/frontend/lib/llm/`
+
+| File | Role |
+|---|---|
+| `router.ts` | Tries Ollama first, falls back to Anthropic. All LLM calls go here. |
+| `embeddings.ts` | Ollama `nomic-embed-text` 768-dim — for indexing + query vectorisation |
+| `pii.ts` | Regex PII scan + mask before any LLM call |
+
+**LLM priority**: Ollama `llama3.2:3b` → Anthropic `claude-haiku-4-5-20251001`
+
+### 3.5 RAG Pipeline — `services/frontend/lib/rag/`
+
+| File | Role |
+|---|---|
+| `extractor.ts` | PDF (pdf-parse / Gemini OCR), DOCX (mammoth), XLSX (xlsx), images (Gemini) |
+| `chunker.ts` | Recursive splitter — 512 token target, 50 token overlap |
+| `retrieval.ts` | Embeds query → pgvector cosine search → formats RAG prompt with citations |
+
+### 3.6 Elasticsearch (Docker)
+BM25 keyword search, complements pgvector semantic search. Runs via `docker-compose up`.
 
 ---
 
-## 5. Database Architecture
+## 4. Data Flows
 
-### 5.1 PostgreSQL (Primary)
-Stores: users, roles, documents metadata, file versions, audit logs, token usage, HR data, operations data, incidents
+### Document Upload → Index
+```
+User uploads file
+  → Supabase Storage (refinery-docs bucket)
+  → POST /api/documents        — create document + version in PostgreSQL
+  → POST /api/documents/ingest
+       → Download from Storage
+       → Extract text (pdf-parse / mammoth / xlsx / Gemini OCR)
+       → Chunk (512 tokens, 50 overlap)
+       → Embed each chunk (Ollama nomic-embed-text)
+       → Store in document_chunks + document_embeddings (pgvector)
+       → Set indexing_status = 'ready'
+       → Audit log
+```
 
-### 5.2 ChromaDB (Vector)
-Stores: document chunks, embeddings, chunk metadata (doc_id, page, chunk_idx)
-Collections: `refinery_docs` (all documents), optionally per-department collections
+### Chat Query → RAG Response
+```
+User sends message
+  → POST /api/chat
+       → PII scan → mask sensitive terms
+       → Get/create chat_session
+       → Save user message
+       → Embed query (Ollama nomic-embed-text)
+       → match_documents() → top-5 chunks (pgvector cosine)
+       → Build RAG prompt with numbered sources
+       → LLM Router → Ollama → (fallback) Anthropic
+       → Response with [1][2] inline citations
+       → Save assistant message + citations JSONB + token_usage
+```
 
-### 5.3 Redis
-Stores: LLM response cache (key: hash of prompt+model), user sessions, rate limit counters
-TTL: LLM cache = 1 hour, sessions = 60 min
-
-### 5.4 MinIO (Object Storage)
-Stores: raw uploaded files, versioned files
-Bucket structure: `refinery-docs/{dept}/{doc_id}/{version}/{filename}`
-
-### 5.5 Elasticsearch
-Stores: document text chunks (BM25 index), search analytics
+### Authentication Flow
+```
+User enters email → POST /api/auth → Supabase sends magic link (Resend)
+User clicks link  → GET /api/auth/callback → session cookie set → redirect /
+middleware.ts validates session on every subsequent request
+```
 
 ---
 
-## 6. Security Architecture
+## 5. Security
 
 | Layer | Control |
 |---|---|
-| Transport | HTTPS / TLS everywhere |
-| Authentication | JWT (RS256), httpOnly cookies |
-| Authorization | RBAC — 6 roles, resource-level permissions |
-| PII | Presidio scan on all user input; PII masked before LLM |
-| Secrets | Never in code; env vars only; `.env` in `.gitignore` |
-| Dependencies | Safety scan in CI (Python), npm audit (Node) |
-| Secrets Scanning | TruffleHog in CI pipeline |
-| Rate Limiting | Per-user, per-endpoint via Redis |
-| Input Validation | Pydantic models (API), Zod (frontend) |
-| Audit Logs | Immutable append-only log: user + action + timestamp + resource |
+| Route protection | `middleware.ts` — Supabase session required |
+| Database | RLS on all tables, role-aware policies |
+| Role enforcement | admin / manager / end_user checked in every API route |
+| PII | Scan + mask before every LLM call, logged to `pii_detections` |
+| Secrets | `.env.local` only — gitignored, never committed |
+| Audit trail | Append-only `audit_logs`, no UPDATE/DELETE allowed |
 
 ---
 
-## 7. Observability Stack
+## 6. Environments
 
-| Layer | Tool | Cost |
+| Env | Frontend | Services |
 |---|---|---|
-| Structured Logging | structlog (Python) + Pino (Node) | Free |
-| Log Aggregation | Loki (docker-compose) | Free |
-| Metrics | Prometheus + Grafana | Free |
-| Error Tracking | Sentry (5k events/month free tier) | Free |
-| Distributed Tracing | OpenTelemetry + Jaeger | Free |
+| Development | `npm run dev` (localhost:3000) | `docker-compose up` + Ollama native |
+| Staging | Cloudflare Pages (staging branch) | Same |
+| Production | Cloudflare Pages (main branch) | Same |
 
 ---
 
-## 8. Deployment Architecture
+## 7. Key Decisions
 
-### docker-compose (Dev & Demo)
-All services run locally via docker-compose:
-- `docker-compose.yml` — development
-- `docker-compose.staging.yml` — staging overrides
-- `docker-compose.prod.yml` — production hardening
-
-### Environment Promotion
-```
-Developer Machine (docker-compose dev)
-    ↓ PR merged to develop
-GitHub Actions CI (lint, test, build)
-    ↓ merge to staging branch
-Staging Environment (docker-compose staging)
-    ↓ manual approval gate
-Production (docker-compose prod)
-```
-
----
-
-## 9. LLM Token Optimization Strategy
-
-1. **Response caching**: Redis cache — identical queries return cached response (saves 100% tokens)
-2. **Prompt compression**: Remove redundant whitespace, truncate long contexts
-3. **Chunk limiting**: Max 5 retrieved chunks per RAG query
-4. **Model tiering**: Simple queries → Ollama local (free); complex → Groq (fast+cheap free tier)
-5. **Streaming**: First-token latency optimized via SSE streaming
-6. **Token counting**: tiktoken tracks all usage before/after LLM call
-7. **Budget enforcement**: Per-user daily token budget configurable by admin
+| Decision | Rationale |
+|---|---|
+| Next.js API routes only | Single repo, single deployment — no separate backend service |
+| Supabase pgvector | Vector search built into the DB — no extra service needed |
+| Ollama primary | Free, local, zero API cost for demo queries |
+| Anthropic fallback | User has credits; Haiku is cost-effective |
+| Gemini for OCR only | Best accuracy for scanned docs; cost contained (OCR is rare) |
+| Single tenant | Halves feature complexity for MVP |
+| No Redis | Supabase + Next.js sufficient for MVP scale |

@@ -1,8 +1,8 @@
 # Database Design
 # RefinerIQ — Refinery Intelligence Platform
 
-**Version**: 0.1 (Draft)
-**Date**: 2026-06-04
+**Version**: 2.0 (Current — matches migrations in `supabase/migrations/`)
+**Date**: 2026-06-05
 
 ---
 
@@ -10,326 +10,260 @@
 
 | Database | Engine | Purpose |
 |---|---|---|
-| Primary | PostgreSQL 16 | Structured data: users, docs metadata, audit, HR, ops, tokens |
-| Vector | ChromaDB | Document embeddings for semantic search |
-| Cache | Redis 7 | LLM response cache, sessions, rate limits |
-| Object Store | MinIO | Raw file storage (versioned) |
-| Search Index | Elasticsearch 8 | Full-text BM25 search over document chunks |
+| Primary + Vector | Supabase PostgreSQL + pgvector | All structured data + semantic embeddings |
+| File Storage | Supabase Storage | Raw uploaded files (bucket: `refinery-docs`) |
+| Search Index | Elasticsearch 8 (Docker) | Full-text BM25 keyword search |
+
+**Removed from stack**: Redis, ChromaDB, MinIO — all replaced by Supabase.
 
 ---
 
-## 2. PostgreSQL Schema
+## 2. Schema (matches `supabase/migrations/`)
 
-### 2.1 Auth & RBAC
+### Migration 001 — Auth & RBAC
 
-```sql
--- Roles
-CREATE TABLE roles (
-    id          SERIAL PRIMARY KEY,
-    name        VARCHAR(50) UNIQUE NOT NULL,  -- admin, manager, operator, hr, compliance, viewer
-    description TEXT,
-    created_at  TIMESTAMPTZ DEFAULT NOW()
-);
+**`public.roles`**
+| Column | Type | Notes |
+|---|---|---|
+| id | SERIAL PK | |
+| name | VARCHAR(50) UNIQUE | `admin`, `manager`, `end_user` |
+| description | TEXT | |
+| created_at | TIMESTAMPTZ | |
 
--- Users
-CREATE TABLE users (
-    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email        VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    full_name    VARCHAR(255) NOT NULL,
-    employee_id  VARCHAR(100) UNIQUE,
-    department   VARCHAR(100),
-    role_id      INT REFERENCES roles(id) NOT NULL,
-    is_active    BOOLEAN DEFAULT TRUE,
-    last_login   TIMESTAMPTZ,
-    created_at   TIMESTAMPTZ DEFAULT NOW(),
-    updated_at   TIMESTAMPTZ DEFAULT NOW()
-);
+Seeded: `admin`, `manager`, `end_user`
 
--- Permissions
-CREATE TABLE permissions (
-    id          SERIAL PRIMARY KEY,
-    resource    VARCHAR(100) NOT NULL,  -- 'document', 'hr_record', 'ops_log'
-    action      VARCHAR(50) NOT NULL,   -- 'read', 'write', 'delete', 'upload'
-    role_id     INT REFERENCES roles(id),
-    UNIQUE(resource, action, role_id)
-);
-```
+**`public.profiles`** — extends `auth.users`
+| Column | Type | Notes |
+|---|---|---|
+| id | UUID PK | References `auth.users(id)` |
+| full_name | VARCHAR(255) | |
+| employee_id | VARCHAR(100) UNIQUE | |
+| department | VARCHAR(100) | `hr` or `operations` |
+| role_id | INT FK | References `roles(id)`, default 3 (end_user) |
+| is_active | BOOLEAN | Default TRUE |
+| created_at / updated_at | TIMESTAMPTZ | |
 
-### 2.2 Document Management
-
-```sql
--- Documents
-CREATE TABLE documents (
-    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    title         VARCHAR(500) NOT NULL,
-    description   TEXT,
-    department    VARCHAR(100),
-    doc_type      VARCHAR(50),          -- 'sop', 'policy', 'report', 'form', 'manual'
-    tags          TEXT[],
-    uploaded_by   UUID REFERENCES users(id),
-    current_version INT DEFAULT 1,
-    is_active     BOOLEAN DEFAULT TRUE,
-    created_at    TIMESTAMPTZ DEFAULT NOW(),
-    updated_at    TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Document Versions
-CREATE TABLE document_versions (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    document_id     UUID REFERENCES documents(id) ON DELETE CASCADE,
-    version_number  INT NOT NULL,
-    file_path       VARCHAR(1000) NOT NULL,   -- MinIO path
-    file_name       VARCHAR(500) NOT NULL,
-    file_size       BIGINT,
-    mime_type       VARCHAR(100),
-    checksum        VARCHAR(64),              -- SHA-256
-    ocr_processed   BOOLEAN DEFAULT FALSE,
-    indexed         BOOLEAN DEFAULT FALSE,
-    uploaded_by     UUID REFERENCES users(id),
-    change_notes    TEXT,
-    created_at      TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(document_id, version_number)
-);
-
--- Document Access Control
-CREATE TABLE document_access (
-    document_id  UUID REFERENCES documents(id) ON DELETE CASCADE,
-    role_id      INT REFERENCES roles(id),
-    can_read     BOOLEAN DEFAULT TRUE,
-    can_download BOOLEAN DEFAULT FALSE,
-    PRIMARY KEY(document_id, role_id)
-);
-
--- Document Chunks (metadata only — vectors in ChromaDB)
-CREATE TABLE document_chunks (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    document_id     UUID REFERENCES documents(id) ON DELETE CASCADE,
-    version_number  INT NOT NULL,
-    chunk_index     INT NOT NULL,
-    page_number     INT,
-    section         VARCHAR(500),
-    text_preview    VARCHAR(500),             -- first 500 chars for display
-    chroma_chunk_id VARCHAR(255) UNIQUE,      -- ChromaDB chunk ID
-    token_count     INT,
-    created_at      TIMESTAMPTZ DEFAULT NOW()
-);
-```
-
-### 2.3 Conversations & Chat
-
-```sql
--- Chat Sessions
-CREATE TABLE chat_sessions (
-    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id      UUID REFERENCES users(id),
-    title        VARCHAR(500),
-    agent_type   VARCHAR(50),   -- 'orchestrator', 'ops', 'hr', 'compliance', 'doc'
-    is_active    BOOLEAN DEFAULT TRUE,
-    created_at   TIMESTAMPTZ DEFAULT NOW(),
-    updated_at   TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Chat Messages
-CREATE TABLE chat_messages (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    session_id      UUID REFERENCES chat_sessions(id) ON DELETE CASCADE,
-    role            VARCHAR(20) NOT NULL,    -- 'user', 'assistant', 'system'
-    content         TEXT NOT NULL,
-    citations       JSONB,                  -- [{doc_id, version, page, chunk_id, text}]
-    model_used      VARCHAR(100),
-    input_tokens    INT,
-    output_tokens   INT,
-    latency_ms      INT,
-    confidence      FLOAT,
-    has_pii         BOOLEAN DEFAULT FALSE,
-    pii_masked      BOOLEAN DEFAULT FALSE,
-    created_at      TIMESTAMPTZ DEFAULT NOW()
-);
-
--- User Feedback / Sentiment
-CREATE TABLE message_feedback (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    message_id      UUID REFERENCES chat_messages(id),
-    user_id         UUID REFERENCES users(id),
-    rating          SMALLINT CHECK (rating BETWEEN 1 AND 5),
-    comment         TEXT,
-    sentiment_score FLOAT,                  -- Presidio/LLM derived
-    sentiment_label VARCHAR(20),            -- positive, neutral, negative
-    created_at      TIMESTAMPTZ DEFAULT NOW()
-);
-```
-
-### 2.4 Token Usage & LLM Tracking
-
-```sql
--- Token Usage
-CREATE TABLE token_usage (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id         UUID REFERENCES users(id),
-    session_id      UUID REFERENCES chat_sessions(id),
-    message_id      UUID REFERENCES chat_messages(id),
-    model           VARCHAR(100) NOT NULL,
-    provider        VARCHAR(50) NOT NULL,    -- ollama, openai, groq, anthropic
-    input_tokens    INT NOT NULL,
-    output_tokens   INT NOT NULL,
-    cached          BOOLEAN DEFAULT FALSE,   -- Redis cache hit
-    cost_usd        NUMERIC(10,6) DEFAULT 0, -- 0 for local/free tier
-    created_at      TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Daily Token Budgets
-CREATE TABLE token_budgets (
-    id          SERIAL PRIMARY KEY,
-    user_id     UUID REFERENCES users(id) UNIQUE,
-    daily_limit INT DEFAULT 100000,
-    used_today  INT DEFAULT 0,
-    reset_date  DATE DEFAULT CURRENT_DATE
-);
-```
-
-### 2.5 HR Module
-
-```sql
--- Employees
-CREATE TABLE employees (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id         UUID REFERENCES users(id),
-    employee_number VARCHAR(50) UNIQUE NOT NULL,
-    first_name      VARCHAR(100) NOT NULL,
-    last_name       VARCHAR(100) NOT NULL,
-    designation     VARCHAR(200),
-    department      VARCHAR(100),
-    manager_id      UUID REFERENCES employees(id),
-    join_date       DATE,
-    employment_type VARCHAR(50),    -- fulltime, contract, trainee
-    status          VARCHAR(50) DEFAULT 'active',
-    created_at      TIMESTAMPTZ DEFAULT NOW()
-);
-
--- HR Documents (policies, onboarding, etc.)
-CREATE TABLE hr_documents (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    document_id UUID REFERENCES documents(id),
-    category    VARCHAR(100),   -- 'policy', 'onboarding', 'benefits', 'leave'
-    effective_date DATE,
-    expiry_date    DATE,
-    is_mandatory   BOOLEAN DEFAULT FALSE
-);
-```
-
-### 2.6 Operations Module
-
-```sql
--- Equipment
-CREATE TABLE equipment (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    asset_tag       VARCHAR(100) UNIQUE NOT NULL,
-    name            VARCHAR(255) NOT NULL,
-    category        VARCHAR(100),   -- 'pump', 'valve', 'vessel', 'compressor'
-    location        VARCHAR(255),
-    unit            VARCHAR(100),   -- refinery unit / plant area
-    status          VARCHAR(50) DEFAULT 'operational',
-    last_maintained TIMESTAMPTZ,
-    created_at      TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Maintenance Logs
-CREATE TABLE maintenance_logs (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    equipment_id    UUID REFERENCES equipment(id),
-    performed_by    UUID REFERENCES users(id),
-    log_type        VARCHAR(50),    -- 'preventive', 'corrective', 'inspection'
-    description     TEXT,
-    findings        TEXT,
-    next_due        DATE,
-    created_at      TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Incidents
-CREATE TABLE incidents (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    reported_by     UUID REFERENCES users(id),
-    equipment_id    UUID REFERENCES equipment(id),
-    severity        VARCHAR(20),    -- 'low', 'medium', 'high', 'critical'
-    title           VARCHAR(500),
-    description     TEXT,
-    root_cause      TEXT,
-    corrective_action TEXT,
-    status          VARCHAR(50) DEFAULT 'open',
-    occurred_at     TIMESTAMPTZ,
-    resolved_at     TIMESTAMPTZ,
-    created_at      TIMESTAMPTZ DEFAULT NOW()
-);
-```
-
-### 2.7 Audit Logs
-
-```sql
--- Audit Log (append-only, never update or delete)
-CREATE TABLE audit_logs (
-    id          BIGSERIAL PRIMARY KEY,
-    user_id     UUID REFERENCES users(id),
-    action      VARCHAR(100) NOT NULL,   -- 'upload_doc', 'query', 'login', 'delete_doc'
-    resource    VARCHAR(100),
-    resource_id VARCHAR(255),
-    metadata    JSONB,                  -- extra context (IP, user agent, etc.)
-    created_at  TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX idx_audit_user ON audit_logs(user_id);
-CREATE INDEX idx_audit_created ON audit_logs(created_at DESC);
-CREATE INDEX idx_audit_action ON audit_logs(action);
-```
+Auto-created on signup via `handle_new_user()` trigger.
 
 ---
 
-## 3. ChromaDB Collections
+### Migration 002 — Departments
 
-### Collection: `refinery_docs`
-```json
-{
-  "id": "chunk_uuid",
-  "embedding": [float, ...],
-  "document": "chunk text content",
-  "metadata": {
-    "document_id": "uuid",
-    "version_number": 1,
-    "chunk_index": 5,
-    "page_number": 3,
-    "department": "operations",
-    "doc_type": "sop",
-    "title": "Equipment Shutdown Procedure",
-    "roles_allowed": ["admin", "manager", "operator"],
-    "created_at": "2026-06-04T00:00:00Z"
-  }
-}
-```
+**`public.departments`**
+| Column | Type | Notes |
+|---|---|---|
+| id | SERIAL PK | |
+| slug | VARCHAR(50) UNIQUE | `hr`, `operations` |
+| name | VARCHAR(100) | Full display name |
+| short_code | VARCHAR(10) | `HR`, `OPS` |
+| description | TEXT | |
+| is_active | BOOLEAN | |
+
+Seeded: `hr` (Human Resources), `operations` (Operations)
 
 ---
 
-## 4. Redis Key Patterns
+### Migration 003 — Document Management
 
-| Key Pattern | Value | TTL | Purpose |
+**`public.documents`**
+| Column | Type | Notes |
+|---|---|---|
+| id | UUID PK | |
+| title | VARCHAR(500) | |
+| description | TEXT | |
+| department_slug | VARCHAR(50) FK | References `departments(slug)` |
+| doc_type | VARCHAR(50) | `sop`, `policy`, `report`, `manual`, `form`, `general` |
+| tags | TEXT[] | |
+| uploaded_by | UUID FK | References `profiles(id)` |
+| current_version | INT | Default 1 |
+| is_active | BOOLEAN | |
+
+**`public.document_versions`**
+| Column | Type | Notes |
+|---|---|---|
+| id | UUID PK | |
+| document_id | UUID FK | |
+| version_number | INT | Unique per document |
+| storage_path | VARCHAR(1000) | Path in Supabase Storage bucket |
+| file_name | VARCHAR(500) | |
+| file_size | BIGINT | Bytes |
+| mime_type | VARCHAR(100) | |
+| checksum | VARCHAR(64) | SHA-256 |
+| ocr_processed | BOOLEAN | |
+| indexed | BOOLEAN | |
+| indexing_status | VARCHAR(20) | `pending` → `processing` → `ready` / `error` |
+| uploaded_by | UUID FK | |
+| change_notes | TEXT | |
+
+**`public.document_chunks`** — chunk metadata only
+| Column | Type | Notes |
+|---|---|---|
+| id | UUID PK | |
+| document_id | UUID FK | |
+| version_number | INT | |
+| chunk_index | INT | |
+| page_number | INT | Estimated from character position |
+| section | VARCHAR(500) | |
+| text_preview | VARCHAR(500) | First 500 chars |
+| token_count | INT | |
+
+**`public.document_embeddings`** — pgvector table
+| Column | Type | Notes |
+|---|---|---|
+| id | UUID PK | |
+| chunk_id | UUID UNIQUE FK | References `document_chunks(id)` |
+| document_id | UUID FK | |
+| department_slug | VARCHAR(50) | For department-scoped retrieval |
+| embedding | vector(768) | Ollama nomic-embed-text output |
+| chunk_text | TEXT | Full chunk text passed to LLM |
+| metadata | JSONB | `{filename, page_number, title, chunk_index}` |
+
+**HNSW index**: `USING hnsw (embedding vector_cosine_ops) WITH (m=16, ef_construction=64)`
+
+**Semantic search function**: `match_documents(query_embedding, dept_slug, match_count, match_threshold)`  
+Returns chunks ordered by cosine similarity above threshold.
+
+---
+
+### Migration 004 — Chat
+
+**`public.chat_sessions`**
+| Column | Type | Notes |
+|---|---|---|
+| id | UUID PK | |
+| user_id | UUID FK | |
+| title | VARCHAR(500) | Auto-set from first message |
+| department_slug | VARCHAR(50) FK | |
+| is_active | BOOLEAN | |
+
+**`public.chat_messages`**
+| Column | Type | Notes |
+|---|---|---|
+| id | UUID PK | |
+| session_id | UUID FK | |
+| role | VARCHAR(20) | `user`, `assistant`, `system` |
+| content | TEXT | |
+| citations | JSONB | `[{id, doc, page, dept}]` |
+| model_used | VARCHAR(100) | e.g. `llama3.2:3b` |
+| provider | VARCHAR(50) | `ollama`, `anthropic`, `gemini` |
+| input_tokens | INT | |
+| output_tokens | INT | |
+| latency_ms | INT | |
+| cached | BOOLEAN | |
+| has_pii | BOOLEAN | PII detected in original input |
+| pii_masked | BOOLEAN | PII was masked before LLM |
+| feedback | VARCHAR(10) | `up`, `down`, NULL |
+
+---
+
+### Migration 005 — Token Usage
+
+**`public.token_usage`**
+| Column | Type | Notes |
+|---|---|---|
+| id | UUID PK | |
+| user_id | UUID FK | |
+| session_id | UUID FK | |
+| message_id | UUID FK | |
+| model | VARCHAR(100) | |
+| provider | VARCHAR(50) | |
+| input_tokens | INT | |
+| output_tokens | INT | |
+| cached | BOOLEAN | |
+| cost_usd | NUMERIC(10,6) | 0 for local/free tier |
+
+**`public.daily_token_usage`** — VIEW  
+Aggregates `total_tokens`, `total_cost`, `query_count` per `user_id` per `usage_date`.
+
+---
+
+### Migration 006 — Audit Logs
+
+**`public.audit_logs`** — append-only
+| Column | Type | Notes |
+|---|---|---|
+| id | BIGSERIAL PK | |
+| user_id | UUID FK | |
+| action | VARCHAR(100) | `upload_doc`, `query`, `login`, `invite_user`, `index_doc` |
+| resource | VARCHAR(100) | `document`, `user`, `chat_session` |
+| resource_id | VARCHAR(255) | |
+| department_slug | VARCHAR(50) | |
+| metadata | JSONB | Extra context |
+| ip_address | INET | |
+| created_at | TIMESTAMPTZ | |
+
+Rules prevent UPDATE and DELETE — append-only enforced at DB level.  
+Helper: `log_action(user_id, action, resource, resource_id, dept_slug, metadata)`
+
+---
+
+### Migration 007 — PII Detection
+
+**`public.pii_detections`**
+| Column | Type | Notes |
+|---|---|---|
+| id | UUID PK | |
+| message_id | UUID FK | References `chat_messages(id)` |
+| user_id | UUID FK | |
+| pii_types | TEXT[] | `['EMAIL', 'PHONE', 'EMPLOYEE_ID', ...]` |
+| token_count | INT | |
+| masked | BOOLEAN | Always TRUE in current implementation |
+
+---
+
+## 3. Row Level Security
+
+Every table has RLS enabled. Key policies:
+
+| Table | End User | Manager | Admin |
 |---|---|---|---|
-| `llm_cache:{hash}` | JSON response | 3600s | LLM response dedup |
-| `session:{jwt_jti}` | user_id + role | 3600s | Session validation |
-| `ratelimit:{user_id}:{endpoint}` | count | 60s | Rate limiting |
-| `token_budget:{user_id}:{date}` | tokens used | 86400s | Daily token tracking |
+| `profiles` | Own row only | Own row only | All rows |
+| `documents` | Own dept only | Own dept only | All |
+| `document_embeddings` | Own dept only | Own dept only | All |
+| `chat_sessions` | Own sessions | Own sessions | All |
+| `chat_messages` | Own sessions | Own sessions | All |
+| `token_usage` | Own rows | Own rows | All |
+| `audit_logs` | No read | No read | All |
+| `pii_detections` | No read | No read | All |
+
+Service role (used in admin API client) bypasses RLS.
+
+---
+
+## 4. Supabase Storage
+
+Bucket: `refinery-docs`  
+Path pattern: `{department_slug}/{document_id}/v{version}/{filename}`
+
+Files are downloaded server-side in the ingestion pipeline — never exposed directly to the browser.
 
 ---
 
 ## 5. Indexes
 
 ```sql
--- Performance indexes
-CREATE INDEX idx_users_email ON users(email);
-CREATE INDEX idx_docs_dept ON documents(department);
-CREATE INDEX idx_docs_type ON documents(doc_type);
-CREATE INDEX idx_doc_versions_doc ON document_versions(document_id);
-CREATE INDEX idx_chunks_doc ON document_chunks(document_id);
-CREATE INDEX idx_chat_sessions_user ON chat_sessions(user_id);
-CREATE INDEX idx_chat_messages_session ON chat_messages(session_id);
-CREATE INDEX idx_token_usage_user_date ON token_usage(user_id, created_at DESC);
-CREATE INDEX idx_incidents_severity ON incidents(severity, status);
+-- Profiles
+idx_profiles_role         ON profiles(role_id)
+idx_profiles_department   ON profiles(department)
+
+-- Documents
+idx_documents_dept        ON documents(department_slug)
+idx_documents_type        ON documents(doc_type)
+idx_doc_versions_doc      ON document_versions(document_id)
+idx_doc_versions_status   ON document_versions(indexing_status)
+idx_chunks_doc            ON document_chunks(document_id)
+idx_embeddings_doc        ON document_embeddings(document_id)
+idx_embeddings_dept       ON document_embeddings(department_slug)
+HNSW index                ON document_embeddings(embedding vector_cosine_ops)
+
+-- Chat
+idx_sessions_user         ON chat_sessions(user_id)
+idx_messages_session      ON chat_messages(session_id)
+idx_messages_created      ON chat_messages(created_at DESC)
+
+-- Token + Audit
+idx_token_usage_user_date ON token_usage(user_id, created_at DESC)
+idx_audit_user            ON audit_logs(user_id)
+idx_audit_created         ON audit_logs(created_at DESC)
+idx_audit_action          ON audit_logs(action)
 ```
