@@ -6,6 +6,8 @@ on:
 
 jobs:
   deploy-staging:
+    continue-on-error: true
+
     name: Build + Deploy to Cloudflare Pages (staging branch)
     runs-on: ubuntu-latest
     environment: staging

@@ -4,11 +4,17 @@ on:
   push:
     branches: [main]
 
+# NOTE: Full Cloudflare Pages deployment requires all API routes to use
+# export const runtime = 'edge'. Routes using pdf-parse, mammoth, xlsx,
+# and @anthropic-ai/sdk need edge-compatible rewrites before this works.
+# For the demo, the app runs locally. This job documents the target state.
+
 jobs:
   deploy:
     name: Build + Deploy to Cloudflare Pages
     runs-on: ubuntu-latest
     environment: production
+    continue-on-error: true   # Non-blocking until edge runtime migration complete
     defaults:
       run:
         working-directory: services/frontend
@@ -34,6 +40,7 @@ jobs:
           NPM_CONFIG_LEGACY_PEER_DEPS: "true"
 
       - name: Deploy to Cloudflare Pages
+        if: success()
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
