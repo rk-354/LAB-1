@@ -1,11 +1,11 @@
 export const runtime = 'nodejs'
 
 // POST /api/documents/upload
-// Accepts multipart/form-data, uploads to Supabase Storage,
-// creates document + version records, then triggers ingestion.
+// Uploads to Supabase Storage + runs ingestion inline (no self-HTTP call)
 
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { runIngestion } from '@/lib/rag/ingest'
 import { NextResponse } from 'next/server'
 import crypto from 'crypto'
 
@@ -105,25 +105,27 @@ export async function POST(req: Request) {
     p_metadata: { file_name: file.name, file_size: file.size, mime_type: file.type, ext },
   })
 
-  // Trigger ingestion asynchronously (fire and forget — status polled via /api/documents)
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-  fetch(`${baseUrl}/api/documents/ingest`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Cookie: req.headers.get('cookie') || '',
-    },
-    body: JSON.stringify({ document_id: doc.id, version_number: 1 }),
-  }).catch(() => {
-    // Ingestion runs in background — errors logged inside the ingest route
-  })
+  // Run ingestion inline — no HTTP self-call, no auth issues, immediate result
+  let indexingStatus = 'error'
+  let chunksIndexed = 0
+  try {
+    const result = await runIngestion(doc.id, 1, user.id)
+    chunksIndexed = result.chunks_indexed
+    indexingStatus = 'ready'
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Ingestion failed'
+    console.error('[upload] ingestion error:', msg)
+    // Don't fail the whole upload — file is in storage, just not indexed yet
+    indexingStatus = 'error'
+  }
 
   return NextResponse.json({
     data: {
       document_id: doc.id,
       version_id: version?.id,
       storage_path: storagePath,
-      indexing_status: 'pending',
+      indexing_status: indexingStatus,
+      chunks_indexed: chunksIndexed,
     },
     error: null,
   }, { status: 201 })
